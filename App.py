@@ -119,13 +119,27 @@ async def webhook(secret: str, request: Request):
         return JSONResponse({"ok": False})
 
 
-@app.api(name="status")
-@app.gpu()
-def status_api(dummy: str = "") -> str:
+def _status_impl(dummy: str = "") -> str:
     db_ok, db_msg = tidb_shim.ping()
     return (f"h2 @{BOT.username if _state['webhook'] else 'starting'} | "
             f"db={db_ok} ({db_msg}) | updates_ok={_state['updates_ok']} | "
             f"updates_err={_state['updates_err']}")
+
+
+_status_fn = _status_impl
+if os.environ.get("SPACES_ZERO_GPU") == "1":
+    try:
+        import spaces
+
+        _status_fn = spaces.GPU(_status_impl)
+        log.info("ZeroGPU decorator applied to status_api impl")
+    except Exception as e:
+        log.warning("ZeroGPU decorate failed: %s", e)
+
+
+@app.api(name="status")
+def status_api(dummy: str = "") -> str:
+    return _status_fn(dummy)
 
 
 log.info("Server mode ready: routes /, /health, /webhook/{secret} + gpu api 'status'")
