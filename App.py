@@ -24,8 +24,9 @@ try:
     @_hf_spaces.GPU
     def _zero_gpu_stub():
         return None
-except Exception:
-    pass
+    log.info("ZeroGPU stub registered OK")
+except Exception as e:
+    log.warning("ZeroGPU stub FAILED: %s", e)
 
 # 1) sqlite3 -> TiDB shim MUST be injected before HOSTING2X import
 import tidb_shim  # noqa: E402
