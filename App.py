@@ -39,6 +39,14 @@ import HOSTING2X as hx  # noqa: E402
 BOT = hx.bot
 OWNER_ID = hx.OWNER_ID
 
+# persistent file store: upload_bots/ mirrored into TiDB
+import file_sync  # noqa: E402
+
+file_sync.ensure_schema()
+_restored = file_sync.restore_all(hx.BASE_DIR)
+log.info("File store restored %d files from TiDB", _restored)
+file_sync.start_thread(hx.BASE_DIR)
+
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "s3cret_wbhk2")
 HOST_URL = os.environ.get("HOST_URL", "").rstrip("/")
 
@@ -99,6 +107,7 @@ async def health():
         "updates_err": _state["updates_err"],
         "last_update_ago_s": round(time.time() - _state["last_update"]) if _state["last_update"] else None,
         "uptime_s": round(time.time() - _t0),
+        "filesync": file_sync.stats(),
     })
 
 
