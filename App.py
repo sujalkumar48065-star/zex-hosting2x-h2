@@ -26,7 +26,9 @@ import telebot  # noqa: E402
 PROXY = os.environ.get("TG_API_PROXY", "https://tgproxy-pages.pages.dev").rstrip("/")
 if not PROXY.endswith("/bot"):
     PROXY = PROXY + "/bot"
-telebot.apihelper.API_URL = PROXY
+# pyTelegramBotAPI >= 4.x builds URLs via API_URL.format(token, method_name)
+telebot.apihelper.API_URL = PROXY + "{0}/{1}"
+telebot.apihelper.FILE_URL = PROXY.replace("/bot", "/file/bot") + "{0}/{1}"
 telebot.apihelper.TIMEOUT = 60
 log.info("Outbound API_URL: %s", telebot.apihelper.API_URL)
 
