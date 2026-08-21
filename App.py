@@ -16,6 +16,17 @@ os.environ.setdefault("PORT", "7860")
 BASE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE)
 
+# ZeroGPU spaces require at least one @spaces.GPU function at startup.
+# This stub is never called - it only satisfies the startup check.
+try:
+    import spaces as _hf_spaces
+
+    @_hf_spaces.GPU
+    def _zero_gpu_stub():
+        return None
+except Exception:
+    pass
+
 # 1) sqlite3 -> TiDB shim MUST be injected before HOSTING2X import
 import tidb_shim  # noqa: E402
 sys.modules["sqlite3"] = tidb_shim
