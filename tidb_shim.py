@@ -37,6 +37,30 @@ _ACCOUNTS = _load_accounts()
 _active = [0]
 _switch_lock = threading.Lock()
 
+# --- simple connection pool: reuse warm TLS connections across sqlite3-style
+#     connect()/close() cycles (HOSTING2X opens a connection per operation) ---
+_pool = []
+_pool_lock = threading.Lock()
+_POOL_MAX = 4
+
+
+def _pool_get():
+    with _pool_lock:
+        if _pool:
+            return _pool.pop()
+    return None
+
+
+def _pool_put(conn):
+    with _pool_lock:
+        if len(_pool) < _POOL_MAX:
+            _pool.append(conn)
+            return
+    try:
+        conn.close()
+    except Exception:
+        pass
+
 FAILOVER_CODES = {2002, 2003, 2006, 2013, 2048, 2055, 4031}
 
 
@@ -144,7 +168,20 @@ class Cursor:
 
 class Connection:
     def __init__(self):
+        db = _pool_get()
+        if db is not None:
+            try:
+                db.ping(reconnect=True)  # keep warm connection alive
+                self._db = db
+                self._from_pool = True
+                return
+            except Exception:
+                try:
+                    db.close()
+                except Exception:
+                    pass
         self._db = _raw_connect()
+        self._from_pool = False
 
     def cursor(self, *a, **k):
         return Cursor(self)
@@ -162,10 +199,15 @@ class Connection:
             pass
 
     def close(self):
-        try:
-            self._db.close()
-        except Exception:
-            pass
+        # return to pool instead of closing (real close on pool overflow)
+        if self._from_pool or len(_pool) < _POOL_MAX:
+            _pool_put(self._db)
+            self._from_pool = True
+        else:
+            try:
+                self._db.close()
+            except Exception:
+                pass
 
 
 def connect(path=None, check_same_thread=False, *a, **k):
