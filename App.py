@@ -1,7 +1,7 @@
 """h2 - ZEX HOSTING BOT (@HOSTING2X_ROBOT) - HF Space 'Hosrrr' (gradio SDK / ZeroGPU).
 
-Canonical gradio launch (satisfies ZeroGPU startup check) + custom FastAPI
-routes (/health, /webhook/<secret>) added to the underlying app.
+FastAPI-first: custom routes (/health, /webhook/<secret>) defined up-front,
+gradio UI mounted at "/" (satisfies ZeroGPU check via event-graph GPU fn).
 Storage: TiDB (same accounts/db as h1) via sqlite3 shim.
 """
 import os
@@ -74,51 +74,16 @@ def _setup_webhook():
 threading.Thread(target=_setup_webhook, daemon=True).start()
 
 
-# ---------------- gradio UI (satisfies ZeroGPU + serves status page) --------
-import gradio as gr  # noqa: E402
-
-
-def _gpu_ping(status):
-    """Attached to a button event so ZeroGPU detects a @spaces.GPU function."""
-    return status
-
-
-if os.environ.get("SPACES_ZERO_GPU") == "1":
-    try:
-        import spaces
-
-        _gpu_ping = spaces.GPU(_gpu_ping)
-        log.info("ZeroGPU decorator applied to _gpu_ping")
-    except Exception as e:
-        log.warning("ZeroGPU decorate failed: %s", e)
-
-
-def _status_text():
-    db_ok, db_msg = tidb_shim.ping()
-    return (
-        f"ZEX HOSTING BOT (h2) — @{BOT.username if _state['webhook'] else 'starting'}\n"
-        f"webhook_set: {_state['webhook']}\n"
-        f"db: {db_ok} ({db_msg})\n"
-        f"updates_ok: {_state['updates_ok']} | updates_err: {_state['updates_err']}\n"
-        f"uptime_s: {round(time.time() - _t0)}"
-    )
-
-
-with gr.Blocks(title="ZEX HOSTING BOT h2") as demo:
-    gr.Markdown("## 🚀 ZEX HOSTING BOT (h2)\n@HOSTING2X_ROBOT — Telegram hosting panel")
-    txt = gr.Textbox(label="Status", value="starting...", lines=6)
-    btn = gr.Button("Refresh status")
-    btn.click(_gpu_ping, txt, txt)
-    demo.load(_gpu_ping, txt, txt)
-
-demo.launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", 7860)),
-            show_error=True, prevent_thread_lock=True)
-
-# ---------------- custom routes on the running FastAPI app ------------------
-from fastapi import Request  # noqa: E402
+# ---------------- FastAPI app with our routes -------------------------------
+from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.responses import JSONResponse, PlainTextResponse  # noqa: E402
 
-fastapi_app = demo.app
+fastapi_app = FastAPI(title="ZEX HOSTING BOT h2")
+
+
+@fastapi_app.get("/")
+def home():
+    return PlainTextResponse("ZEX HOSTING BOT (h2) - @HOSTING2X_ROBOT - RUNNING")
 
 
 @fastapi_app.get("/health")
@@ -153,7 +118,44 @@ async def webhook(secret: str, request: Request):
         return JSONResponse({"ok": False})
 
 
-log.info("Custom routes added: /health, /webhook/{secret}")
+# ---------------- gradio UI mounted at /ui ----------------------------------
+import gradio as gr  # noqa: E402
 
-# block forever (uvicorn keeps serving in background thread)
-threading.Event().wait()
+
+def _gpu_ping(status):
+    """Attached to button/load events so ZeroGPU detects a @spaces.GPU function."""
+    db_ok, db_msg = tidb_shim.ping()
+    return (
+        f"ZEX HOSTING BOT (h2)\n"
+        f"webhook_set: {_state['webhook']}\n"
+        f"db: {db_ok} ({db_msg})\n"
+        f"updates_ok: {_state['updates_ok']} | updates_err: {_state['updates_err']}\n"
+        f"uptime_s: {round(time.time() - _t0)}"
+    )
+
+
+if os.environ.get("SPACES_ZERO_GPU") == "1":
+    try:
+        import spaces
+
+        _gpu_ping = spaces.GPU(_gpu_ping)
+        log.info("ZeroGPU decorator applied to _gpu_ping")
+    except Exception as e:
+        log.warning("ZeroGPU decorate failed: %s", e)
+
+with gr.Blocks(title="ZEX HOSTING BOT h2") as demo:
+    gr.Markdown("## 🚀 ZEX HOSTING BOT (h2)\n@HOSTING2X_ROBOT — Telegram hosting panel")
+    txt = gr.Textbox(label="Status", value="starting...", lines=6)
+    btn = gr.Button("Refresh status")
+    btn.click(_gpu_ping, txt, txt)
+    demo.load(_gpu_ping, txt, txt)
+
+app = gr.mount_gradio_app(fastapi_app, demo, path="/ui")
+log.info("Gradio UI mounted at /ui; routes: /, /health, /webhook/{secret}")
+
+if __name__ == "__main__":
+    import uvicorn
+
+    port = int(os.environ.get("PORT", 7860))
+    log.info("Starting uvicorn on 0.0.0.0:%s", port)
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
