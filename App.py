@@ -1,7 +1,7 @@
 """h2 - ZEX HOSTING BOT (@HOSTING2X_ROBOT) - HF Space 'Hosrrr' (gradio SDK / ZeroGPU).
 
-FastAPI-first: custom routes (/health, /webhook/<secret>) defined up-front,
-gradio UI mounted at "/" (satisfies ZeroGPU check via event-graph GPU fn).
+Uses gradio 6 Server mode: FastAPI subclass with custom routes (/health,
+/webhook/<secret>) + launch() so the ZeroGPU startup check passes.
 Storage: TiDB (same accounts/db as h1) via sqlite3 shim.
 """
 import os
@@ -74,20 +74,21 @@ def _setup_webhook():
 threading.Thread(target=_setup_webhook, daemon=True).start()
 
 
-# ---------------- FastAPI app with our routes -------------------------------
-from fastapi import FastAPI, Request  # noqa: E402
+# ---------------- gradio 6 Server mode ---------------------------------------
+from gradio import Server  # noqa: E402
 from fastapi.responses import JSONResponse, PlainTextResponse  # noqa: E402
+from fastapi import Request  # noqa: E402
 
-fastapi_app = FastAPI(title="ZEX HOSTING BOT h2")
+app = Server()
 
 
-@fastapi_app.get("/")
-def home():
+@app.get("/")
+async def home():
     return PlainTextResponse("ZEX HOSTING BOT (h2) - @HOSTING2X_ROBOT - RUNNING")
 
 
-@fastapi_app.get("/health")
-def health():
+@app.get("/health")
+async def health():
     db_ok, db_msg = tidb_shim.ping()
     return JSONResponse({
         "bot": "running" if _state["webhook"] else "starting",
@@ -101,7 +102,7 @@ def health():
     })
 
 
-@fastapi_app.post("/webhook/{secret}")
+@app.post("/webhook/{secret}")
 async def webhook(secret: str, request: Request):
     if secret != WEBHOOK_SECRET:
         return JSONResponse({"ok": False}, status_code=403)
@@ -118,44 +119,16 @@ async def webhook(secret: str, request: Request):
         return JSONResponse({"ok": False})
 
 
-# ---------------- gradio UI mounted at /ui ----------------------------------
-import gradio as gr  # noqa: E402
-
-
-def _gpu_ping(status):
-    """Attached to button/load events so ZeroGPU detects a @spaces.GPU function."""
+@app.api(name="status")
+@app.gpu()
+def status_api(dummy: str = "") -> str:
     db_ok, db_msg = tidb_shim.ping()
-    return (
-        f"ZEX HOSTING BOT (h2)\n"
-        f"webhook_set: {_state['webhook']}\n"
-        f"db: {db_ok} ({db_msg})\n"
-        f"updates_ok: {_state['updates_ok']} | updates_err: {_state['updates_err']}\n"
-        f"uptime_s: {round(time.time() - _t0)}"
-    )
+    return (f"h2 @{BOT.username if _state['webhook'] else 'starting'} | "
+            f"db={db_ok} ({db_msg}) | updates_ok={_state['updates_ok']} | "
+            f"updates_err={_state['updates_err']}")
 
 
-if os.environ.get("SPACES_ZERO_GPU") == "1":
-    try:
-        import spaces
-
-        _gpu_ping = spaces.GPU(_gpu_ping)
-        log.info("ZeroGPU decorator applied to _gpu_ping")
-    except Exception as e:
-        log.warning("ZeroGPU decorate failed: %s", e)
-
-with gr.Blocks(title="ZEX HOSTING BOT h2") as demo:
-    gr.Markdown("## 🚀 ZEX HOSTING BOT (h2)\n@HOSTING2X_ROBOT — Telegram hosting panel")
-    txt = gr.Textbox(label="Status", value="starting...", lines=6)
-    btn = gr.Button("Refresh status")
-    btn.click(_gpu_ping, txt, txt)
-    demo.load(_gpu_ping, txt, txt)
-
-app = gr.mount_gradio_app(fastapi_app, demo, path="/ui")
-log.info("Gradio UI mounted at /ui; routes: /, /health, /webhook/{secret}")
+log.info("Server mode ready: routes /, /health, /webhook/{secret} + gpu api 'status'")
 
 if __name__ == "__main__":
-    import uvicorn
-
-    port = int(os.environ.get("PORT", 7860))
-    log.info("Starting uvicorn on 0.0.0.0:%s", port)
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
+    app.launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", 7860)), show_error=True)
