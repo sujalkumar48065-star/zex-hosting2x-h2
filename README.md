@@ -1,13 +1,11 @@
 ---
 title: Hosrrr
-emoji: 🏆
-colorFrom: green
-colorTo: pink
+emoji: 🚀
+colorFrom: blue
+colorTo: green
 sdk: gradio
-sdk_version: 6.20.0
-python_version: '3.12'
-app_file: app.py
+app_file: App.py
 pinned: false
 ---
 
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
+ZEX HOSTING BOT (h2) - @HOSTING2X_ROBOT
