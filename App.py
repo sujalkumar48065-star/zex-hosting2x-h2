@@ -50,6 +50,17 @@ file_sync.start_thread(hx.BASE_DIR)
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "s3cret_wbhk2")
 HOST_URL = os.environ.get("HOST_URL", "").rstrip("/")
 
+# --- scrub secrets out of process environment (all modules above already
+#     captured their values) so hosted scripts can't leak them via
+#     os.environ OR /proc/<pid>/environ ---
+_SENS = ("TOKEN", "TIDB", "SECRET", "PASSWORD", "_PASS", "PASS=", "PROXY",
+         "API_KEY", "HF_", "GITHUB", "AWS_", "CLOUDFLARE")
+_scrubbed = [k for k in os.environ if any(m in k.upper() for m in _SENS)]
+for _k in _scrubbed:
+    del os.environ[_k]
+log.info("Scrubbed %d secret env vars from process: %s", len(_scrubbed),
+         [k.split('_')[0] + '_***' for k in _scrubbed])
+
 _state = {"webhook": False, "last_update": 0.0, "updates_ok": 0, "updates_err": 0}
 _t0 = time.time()
 

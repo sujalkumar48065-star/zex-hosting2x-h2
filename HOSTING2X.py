@@ -2433,6 +2433,17 @@ def handle_py_file(file_path, script_owner_id, user_folder, file_name, message):
         bot.reply_to(message, f"❌ Error processing Python file: {str(e)}")
 
 # --- Automatic Package Installation & Script Running ---
+# --- child env sanitizer: hosted scripts must NEVER see panel secrets ---
+_KEEP_ENV = {'PATH', 'HOME', 'LANG', 'LC_ALL', 'TMPDIR', 'TZ', 'SHELL', 'TERM',
+             'PYTHONUNBUFFERED', 'PYTHONIOENCODING', 'PYTHONUTF8'}
+
+
+def _safe_child_env():
+    out = {k: v for k, v in os.environ.items() if k in _KEEP_ENV}
+    out.setdefault('PYTHONUNBUFFERED', '1')
+    return out
+
+
 def run_script(script_path, script_owner_id, user_folder, file_name, message_obj_for_reply, attempt=1):
     """Run Python script. script_owner_id is used for the script_key. message_obj_for_reply is for sending feedback."""
     max_attempts = 2 
@@ -2457,7 +2468,7 @@ def run_script(script_path, script_owner_id, user_folder, file_name, message_obj
             logger.info(f"Running Python pre-check: {' '.join(check_command)}")
             check_proc = None
             try:
-                check_proc = subprocess.Popen(check_command, cwd=user_folder, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='ignore')
+                check_proc = subprocess.Popen(check_command, cwd=user_folder, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='ignore', env=_safe_child_env())
                 stdout, stderr = check_proc.communicate(timeout=5)
                 return_code = check_proc.returncode
                 logger.info(f"Python Pre-check early. RC: {return_code}. Stderr: {stderr[:200]}...")
@@ -2513,7 +2524,7 @@ def run_script(script_path, script_owner_id, user_folder, file_name, message_obj
             process = subprocess.Popen(
                 [sys.executable, script_path], cwd=user_folder, stdout=log_file, stderr=log_file,
                 stdin=subprocess.PIPE, startupinfo=startupinfo, creationflags=creationflags,
-                encoding='utf-8', errors='ignore'
+                encoding='utf-8', errors='ignore', env=_safe_child_env()
             )
             logger.info(f"Started Python process {process.pid} for {script_key}")
             bot_scripts[script_key] = {
@@ -2570,7 +2581,7 @@ def run_js_script(script_path, script_owner_id, user_folder, file_name, message_
             logger.info(f"Running JS pre-check: {' '.join(check_command)}")
             check_proc = None
             try:
-                check_proc = subprocess.Popen(check_command, cwd=user_folder, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='ignore')
+                check_proc = subprocess.Popen(check_command, cwd=user_folder, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='ignore', env=_safe_child_env())
                 stdout, stderr = check_proc.communicate(timeout=5)
                 return_code = check_proc.returncode
                 logger.info(f"JS Pre-check early. RC: {return_code}. Stderr: {stderr[:200]}...")
@@ -2628,7 +2639,7 @@ def run_js_script(script_path, script_owner_id, user_folder, file_name, message_
             process = subprocess.Popen(
                 ['node', script_path], cwd=user_folder, stdout=log_file, stderr=log_file,
                 stdin=subprocess.PIPE, startupinfo=startupinfo, creationflags=creationflags,
-                encoding='utf-8', errors='ignore'
+                encoding='utf-8', errors='ignore', env=_safe_child_env()
             )
             logger.info(f"Started JS process {process.pid} for {script_key}")
             bot_scripts[script_key] = {
