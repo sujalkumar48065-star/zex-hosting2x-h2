@@ -6,16 +6,74 @@ Space restarts/rebuilds. Uses tidb_shim connections (pooling + failover).
                  and deletes rows for removed files
 """
 import os
+import base64
 import threading
 import time
 import logging
 
 import pymysql
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 log = logging.getLogger("h2_filesync")
 
 SYNC_INTERVAL = 15
 MAX_FILE_BYTES = 50 * 1024 * 1024  # skip > 50MB
+
+_ENC_PREFIX = b"ENC1:"
+_KEY = None
+
+
+def _get_key():
+    global _KEY
+    if _KEY is None:
+        raw = os.environ.get("FILE_CRYPT_KEY", "")
+        if raw:
+            _KEY = base64.urlsafe_b64decode(raw)
+    return _KEY
+
+
+def enc_bytes(data):
+    k = _get_key()
+    if not k or data.startswith(_ENC_PREFIX):
+        return data
+    nonce = os.urandom(12)
+    return _ENC_PREFIX + nonce + AESGCM(k).encrypt(nonce, bytes(data), None)
+
+
+def dec_bytes(data):
+    if not data.startswith(_ENC_PREFIX):
+        return data
+    k = _get_key()
+    if not k:
+        raise RuntimeError("encrypted row but FILE_CRYPT_KEY missing")
+    return AESGCM(k).decrypt(data[5:17], data[17:], None)
+
+
+def migrate_encrypt():
+    """One-time pass: encrypt any plaintext blobs already stored."""
+    try:
+        conn = _connect_retry()
+    except Exception as e:
+        log.error("migrate_encrypt: db connect failed: %s", e)
+        return 0
+    n = 0
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT path, content FROM h2_files")
+        for path, content in cur.fetchall():
+            if content is None or content.startswith(_ENC_PREFIX):
+                continue
+            cur.execute(
+                "UPDATE h2_files SET content=%s WHERE path=%s",
+                (enc_bytes(content), path),
+            )
+            conn.commit()
+            n += 1
+        conn.close()
+        log.info("migrate_encrypt: encrypted %d existing blobs", n)
+    except Exception as e:
+        log.error("migrate_encrypt failed: %s", e)
+    return n
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS h2_files (
@@ -89,7 +147,7 @@ def restore_all(base_dir):
                 if need and content is not None:
                     os.makedirs(os.path.dirname(dest), exist_ok=True)
                     with open(dest, "wb") as f:
-                        f.write(content)
+                        f.write(dec_bytes(content))
                     n += 1
             except Exception as e:
                 log.error("restore %s: %s", path, e)
@@ -136,7 +194,7 @@ def sync_once(base_dir):
             cur.execute(
                 "INSERT INTO h2_files (path, content, size, mtime) VALUES (%s,%s,%s,%s) "
                 "ON DUPLICATE KEY UPDATE content=VALUES(content), size=VALUES(size), mtime=VALUES(mtime)",
-                (rel, blob, st.st_size, st.st_mtime),
+                (rel, enc_bytes(blob), st.st_size, st.st_mtime),
             )
             conn.commit()
             conn.close()

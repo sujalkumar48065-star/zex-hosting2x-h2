@@ -43,6 +43,7 @@ OWNER_ID = hx.OWNER_ID
 import file_sync  # noqa: E402
 
 file_sync.ensure_schema()
+file_sync.migrate_encrypt()
 _restored = file_sync.restore_all(hx.BASE_DIR)
 log.info("File store restored %d files from TiDB", _restored)
 file_sync.start_thread(hx.BASE_DIR)
