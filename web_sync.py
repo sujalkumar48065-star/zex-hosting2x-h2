@@ -2,6 +2,7 @@
 so hosted websites survive Space restarts. Uses tidb_shim connections.
 """
 import os
+import sys
 import json
 import threading
 import time
