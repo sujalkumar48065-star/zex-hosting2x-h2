@@ -4119,8 +4119,7 @@ def _web_doc_catcher(message):
     bot.reply_to(message,
         "✍️ "+_t("now send a name for your site")+"\n"
         "("+_t("letters & numbers only")+")\n\n"
-        "🔗 "+_t("your link will be")+": "
-        + f"https://{NETLIFY_MAIN_SITE}.netlify.app/<"+_t("name")+">")
+        "⏳ "+_t("link will be shown after admin approval"))
 
 @bot.message_handler(func=lambda m: m.from_user.id in web_sessions and web_sessions[m.from_user.id].get('stage') == 'name')
 def _web_name_catcher(message):
@@ -4156,7 +4155,7 @@ def _web_name_catcher(message):
     markup.row(
         types.InlineKeyboardButton("\u2705 "+_t("approve"), callback_data=f"wapprove_{key}"),
         types.InlineKeyboardButton("\u2716\uFE0F "+_t("reject"), callback_data=f"wreject_{key}"))
-    alert = ai_report + "\n📄 "+_t("site")+": "+sess['fname']+" · 🏷 "+full+"\n🔗 "+_web_url(full)
+    alert = ai_report + "\n📄 "+_t("site")+": "+sess['fname']+" · 🏷 "+full
     if extra: alert += "\n"+"\n".join(extra)
     alert += ALERT_SUFFIX
     for aid in admin_ids:
