@@ -17,7 +17,7 @@ os.environ.setdefault("PORT", "7860")
 BASE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE)
 
-# sqlite3 -> TiDB shim MUST be injected before HOSTING2X import
+# sqlite3 -> TiDB shim MUST be injected before Hbi import
 import tidb_shim  # noqa: E402
 sys.modules["sqlite3"] = tidb_shim
 
@@ -34,7 +34,7 @@ telebot.apihelper.TIMEOUT = 60
 log.info("Outbound API_URL: %s", telebot.apihelper.API_URL)
 
 # import bot module (registers handlers; init_db()+load_data() run at module level)
-import HOSTING2X as hx  # noqa: E402
+import Hbi as hx  # noqa: E402
 
 BOT = hx.bot
 OWNER_ID = hx.OWNER_ID
