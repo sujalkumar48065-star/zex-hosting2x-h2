@@ -103,6 +103,22 @@ def _setup_webhook():
 threading.Thread(target=_setup_webhook, daemon=True).start()
 
 
+def _keep_alive_loop():
+    """Ping own /health every 5 min to prevent ZeroGPU sleep."""
+    import urllib.request
+    port = int(os.environ.get("PORT", 7860))
+    url = f"http://127.0.0.1:{port}/health"
+    while True:
+        time.sleep(300)
+        try:
+            urllib.request.urlopen(url, timeout=10)
+        except Exception:
+            pass
+
+threading.Thread(target=_keep_alive_loop, daemon=True).start()
+log.info("Keep-alive self-ping thread started (every 300s)")
+
+
 # ---------------- gradio 6 Server mode ---------------------------------------
 from gradio import Server  # noqa: E402
 from fastapi.responses import JSONResponse, PlainTextResponse  # noqa: E402
