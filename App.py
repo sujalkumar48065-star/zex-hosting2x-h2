@@ -48,6 +48,15 @@ _restored = file_sync.restore_all(hx.BASE_DIR)
 log.info("File store restored %d files from TiDB", _restored)
 file_sync.start_thread(hx.BASE_DIR)
 
+# web hosting persistence
+import web_sync  # noqa: E402
+web_sync.ensure_schema()
+_web_dir = os.path.join(hx.BASE_DIR, "web_files")
+os.makedirs(_web_dir, exist_ok=True)
+_web_files_restored = web_sync.restore_files(_web_dir)
+log.info("Web files restored %d from TiDB", _web_files_restored)
+web_sync.start_thread(_web_dir)
+
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "s3cret_wbhk2")
 HOST_URL = os.environ.get("HOST_URL", "").rstrip("/")
 

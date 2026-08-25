@@ -3936,6 +3936,11 @@ os.makedirs(WEB_FILES_DIR, exist_ok=True)
 
 def _load_web_manifest():
     try:
+        import web_sync
+        return web_sync.restore_manifest()
+    except Exception:
+        pass
+    try:
         with open(WEB_MANIFEST_PATH, 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception:
@@ -3946,6 +3951,11 @@ def _save_web_manifest():
             json.dump(web_manifest, f)
     except Exception as e:
         logger.error(f"manifest save err: {e}")
+    try:
+        import web_sync
+        web_sync.save_manifest(web_manifest)
+    except Exception as e:
+        logger.error(f"manifest TiDB save err: {e}")
 
 web_manifest = _load_web_manifest()   # {name: {'uid':..,'created':'YYYY-MM-DD','ftype':'html'|'zip'}}
 _main_site_id = [None]
@@ -4502,8 +4512,14 @@ def handle_callbacks(call):
         elif data.startswith('approve_zip_'): admin_required_callback(call, process_approve_zip)
         elif data.startswith('reject_zip_'): admin_required_callback(call, process_reject_zip)
         elif data == 'web_host':
+            bot.answer_callback_query(call.id, "🌐 web host")
+            try: bot.delete_message(call.message.chat.id, call.message.message_id)
+            except Exception: pass
             _logic_web_host(call.message)
         elif data == 'my_websites':
+            bot.answer_callback_query(call.id, "🌐 my web")
+            try: bot.delete_message(call.message.chat.id, call.message.message_id)
+            except Exception: pass
             _logic_my_websites(call.message)
         elif data.startswith('wapprove_'):
             if user_id not in admin_ids:
@@ -4589,6 +4605,8 @@ def handle_callbacks(call):
                 bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, reply_markup=mk)
             except Exception: pass
             bot.answer_callback_query(call.id)
+        elif data == 'noop':
+            bot.answer_callback_query(call.id)
         else:
             logger.warning(f"Unhandled callback data: {data} from user {user_id}")
             bot.answer_callback_query(call.id, "\U0001F504 "+_t("menu refreshed"))
@@ -4655,7 +4673,11 @@ def upload_callback(call):
         return
     bot.answer_callback_query(call.id) 
     deploy_sessions[call.from_user.id] = True
-    bot.send_message(call.message.chat.id, f"\U0001F3AF {_t('drop your script here')} \u2014 `.py` \u00B7 `.js` · `.zip`")
+    try:
+        bot.edit_message_text(f"\U0001F3AF {_t('drop your script here')} \u2014 `.py` \u00B7 `.js` · `.zip`",
+                             call.message.chat.id, call.message.message_id)
+    except Exception:
+        bot.send_message(call.message.chat.id, f"\U0001F3AF {_t('drop your script here')} \u2014 `.py` \u00B7 `.js` · `.zip`")
 
 def check_files_callback(call):
     user_id = call.from_user.id
@@ -6185,15 +6207,18 @@ def cleanup():
     logger.warning("Cleanup finished.")
 atexit.register(cleanup)
 
-# --- Catch-all: stray text/messages -> gentle hint (registered LAST) ---
+# --- Catch-all: stray text/messages -> show menu (registered LAST) ---
 @bot.message_handler(func=lambda m: True, content_types=['text'])
 def _logic_stray_text(message):
     _touch_user(message.from_user.id)
     t = (message.text or '').strip()
+    uid = message.from_user.id
     if t.startswith('/'):
-        bot.reply_to(message, "\U0001F937 "+_t("unknown command")+" \u2014 "+_t("use the buttons below")+" \U0001F447")
+        bot.reply_to(message, "\U0001F937 "+_t("unknown command")+" \u2014 "+_t("use the buttons below")+" \U0001F447",
+                     reply_markup=create_reply_keyboard_main_menu(uid))
     else:
-        bot.reply_to(message, "\U0001F916 "+_t("i did not get that")+" \u2014 "+_t("use the buttons below")+" \U0001F447")
+        bot.reply_to(message, "\U0001F916 "+_t("i did not get that")+" \u2014 "+_t("use the buttons below")+" \U0001F447",
+                     reply_markup=create_reply_keyboard_main_menu(uid))
 
 # --- Main Execution ---
 if __name__ == '__main__':
