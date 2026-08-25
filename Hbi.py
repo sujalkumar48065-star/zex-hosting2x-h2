@@ -3273,76 +3273,110 @@ def _logic_subscriptions_panel(message):
 def _logic_statistics(message):
     user_id = message.from_user.id
     
-    # Check if user is banned
     if is_user_banned(user_id):
         bot.reply_to(message, "\u26D4 your account is restricted from this bot.")
         return
     
-    # Check mandatory subscription first
     is_subscribed, not_joined = check_mandatory_subscription(user_id)
     if not is_subscribed and user_id not in admin_ids:
         subscription_message, markup = create_subscription_check_message(not_joined)
         bot.reply_to(message, subscription_message, reply_markup=markup, parse_mode='Markdown')
         return
-        
-    total_users = len(active_users)
-    total_files_records = sum(len(files) for files in user_files.values())
 
-    # --- live member records (DB se real-time) ---
-    today_str = datetime.now().strftime('%Y-%m-%d')
-    new_today = active_today = premium_count = 0
-    try:
-        with DB_LOCK:
-            conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
-            c = conn.cursor()
-            c.execute("SELECT COUNT(*) FROM active_users WHERE join_date LIKE ?", (today_str+'%',))
-            new_today = c.fetchone()[0]
-            c.execute("SELECT COUNT(*) FROM active_users WHERE last_seen LIKE ?", (today_str+'%',))
-            active_today = c.fetchone()[0]
-            conn.close()
-    except Exception as e:
-        logger.error(f"stats db err: {e}")
-    now_dt = datetime.now()
-    for uid_s, sub in user_subscriptions.items():
-        try:
-            if sub.get('expiry') and sub['expiry'] > now_dt: premium_count += 1
-        except Exception: pass
-    web_total = len(web_manifest)
-
-    running_bots_count = 0
-    user_running_bots = 0
-
+    my_files = user_files.get(user_id, [])
+    my_file_count = len(my_files)
+    my_running = 0
+    my_stopped = 0
     for script_key_iter, script_info_iter in list(bot_scripts.items()):
-        s_owner_id, _ = script_key_iter.split('_', 1) # Extract owner_id from key
-        if is_bot_running(int(s_owner_id), script_info_iter['file_name']):
-            running_bots_count += 1
-            if int(s_owner_id) == user_id:
-                user_running_bots +=1
+        s_owner_id, _ = script_key_iter.split('_', 1)
+        if int(s_owner_id) == user_id:
+            if is_bot_running(int(s_owner_id), script_info_iter['file_name']):
+                my_running += 1
+            else:
+                my_stopped += 1
 
-    stats_msg_base = (f"\U0001F4C8 {_t('statistics')} -/ 📊\n\n"
-                      "╭━━━「 👥 ᴍᴇᴍʙᴇʀꜱ 」━━━╮\n"
-                      f"┃ \U0001F465 {_t('total members')} : {total_users}\n"
-                      f"┃ 🆕 {_t('new today')} : {new_today}\n"
-                      f"┃ 🟢 {_t('online today')} : {active_today}\n"
-                      f"┃ 💎 ᴘʀᴇᴍɪᴜᴍ : {premium_count}\n"
-                      f"┃ \U0001F6AB {_t('banned')} : {len(banned_users)}\n"
-                      "╰━━━━━━━━━━━━━━━━━━╯\n"
-                      "╭━━━「 🚀 ʜᴏꜱᴛɪɴɢ 」━━━╮\n"
-                      f"┃ \U0001F5C2\uFE0F {_t('files')} : {total_files_records}\n"
-                      f"┃ \U0001F7E9 {_t('running bots')} : {running_bots_count}\n"
-                      f"┃ 🌐 ᴡᴇʙꜱɪᴛᴇꜱ : {web_total}\n"
-                      "╰━━━━━━━━━━━━━━━━━━╯\n")
+    my_web_count = sum(1 for v in web_manifest.values() if v.get('uid') == user_id)
+
+    my_storage_bytes = 0
+    upload_dir = os.path.join(BASE_DIR, 'upload_bots', str(user_id))
+    if os.path.isdir(upload_dir):
+        for root, _, files in os.walk(upload_dir):
+            for fn in files:
+                try: my_storage_bytes += os.path.getsize(os.path.join(root, fn))
+                except Exception: pass
+    if my_storage_bytes >= 1024 * 1024:
+        storage_str = f"{my_storage_bytes / (1024*1024):.1f} MB"
+    elif my_storage_bytes >= 1024:
+        storage_str = f"{my_storage_bytes / 1024:.1f} KB"
+    else:
+        storage_str = f"{my_storage_bytes} B"
+
+    tier = "👑 " + _t("developer") if user_id == OWNER_ID else \
+           "🛡️ " + _t("admin") if user_id in admin_ids else \
+           "💎 " + _t("premium") if user_id in user_subscriptions and user_subscriptions[user_id].get('expiry', datetime.min) > datetime.now() else \
+           "💠 " + _t("free user")
+
+    stats_msg = (f"📊 {_t('your stats')} -/ 🎭\n\n"
+                 f"╭━━━「 👤 {_t('account')} 」━━━╮\n"
+                 f"┃ 🆔 {_t('user id')} : {user_id}\n"
+                 f"┃ 👑 {_t('tier')} : {tier}\n"
+                 f"╰━━━━━━━━━━━━━━━━━━╯\n\n"
+                 f"╭━━━「 📁 {_t('my files')} 」━━━╮\n"
+                 f"┃ 📁 {_t('files')} : {my_file_count}\n"
+                 f"┃ 🟩 {_t('running')} : {my_running}\n"
+                 f"┃ ⬜ {_t('stopped')} : {my_stopped}\n"
+                 f"╰━━━━━━━━━━━━━━━━━━╯\n\n"
+                 f"╭━━━「 💾 {_t('storage')} 」━━━╮\n"
+                 f"┃ 💾 {_t('disk used')} : {storage_str}\n"
+                 f"╰━━━━━━━━━━━━━━━━━━╯\n\n"
+                 f"╭━━━「 🌐 {_t('websites')} 」━━━╮\n"
+                 f"┃ 🌐 {_t('sites')} : {my_web_count}\n"
+                 f"╰━━━━━━━━━━━━━━━━━━╯")
 
     if user_id in admin_ids:
+        total_users = len(active_users)
+        total_files_records = sum(len(files) for files in user_files.values())
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        new_today = active_today = premium_count = 0
+        try:
+            with DB_LOCK:
+                conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
+                c = conn.cursor()
+                c.execute("SELECT COUNT(*) FROM active_users WHERE join_date LIKE ?", (today_str+'%',))
+                new_today = c.fetchone()[0]
+                c.execute("SELECT COUNT(*) FROM active_users WHERE last_seen LIKE ?", (today_str+'%',))
+                active_today = c.fetchone()[0]
+                conn.close()
+        except Exception as e:
+            logger.error(f"stats db err: {e}")
+        for uid_s, sub in user_subscriptions.items():
+            try:
+                if sub.get('expiry') and sub['expiry'] > datetime.now(): premium_count += 1
+            except Exception: pass
+        running_bots_count = sum(1 for sk, si in bot_scripts.items()
+                                if is_bot_running(int(sk.split('_')[0]), si['file_name']))
+        web_total = len(web_manifest)
         lock_icon = "\U0001F512" if bot_locked else "\U0001F513"
-        stats_msg_admin = (f"\u2500"*17+f"\n"
-                           f"{_t('lock')} ....... {lock_icon}\n"
-                           f"{_t('channels')} ..... {len(mandatory_channels)}\n"
-                           f"{_t('limits')} ....... {len(user_limits)}\n"
-                           f"\U0001F916 {_t('yours')} ........ {user_running_bots}")
-        stats_msg = stats_msg_base + stats_msg_admin
-    else:
-        stats_msg = stats_msg_base + ("\u2500"*17+f"\n\U0001F916 {_t('yours')} ........ {user_running_bots}")
+        stats_msg += (f"\n\n{'━'*20}\n"
+                      f"🛡️ {_t('admin panel')}\n"
+                      f"{'━'*20}\n"
+                      f"╭━━━「 👥 {_t('members')} 」━━━╮\n"
+                      f"┃ 👥 {_t('total members')} : {total_users}\n"
+                      f"┃ 🆕 {_t('new today')} : {new_today}\n"
+                      f"┃ 🟢 {_t('online today')} : {active_today}\n"
+                      f"┃ 💎 premium : {premium_count}\n"
+                      f"┃ 🚫 {_t('banned')} : {len(banned_users)}\n"
+                      f"╰━━━━━━━━━━━━━━━━━━╯\n"
+                      f"╭━━━「 🚀 {_t('hosting')} 」━━━╮\n"
+                      f"┃ 📁 {_t('files')} : {total_files_records}\n"
+                      f"┃ 🟩 {_t('running bots')} : {running_bots_count}\n"
+                      f"┃ 🌐 websites : {web_total}\n"
+                      f"╰━━━━━━━━━━━━━━━━━━╯\n"
+                      f"╭━━━「 ⚙️ {_t('system')} 」━━━╮\n"
+                      f"┃ 🔒 {_t('lock')} : {lock_icon}\n"
+                      f"┃ 📡 {_t('channels')} : {len(mandatory_channels)}\n"
+                      f"┃ 📋 {_t('limits')} : {len(user_limits)}\n"
+                      f"╰━━━━━━━━━━━━━━━━━━╯")
 
     bot.reply_to(message, stats_msg)
 
