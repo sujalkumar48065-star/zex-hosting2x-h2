@@ -1,0 +1,5 @@
+{
+  "build": {
+    "hardware": "cpu-basic"
+  }
+}
