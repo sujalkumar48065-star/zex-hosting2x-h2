@@ -7,6 +7,7 @@ Space restarts/rebuilds. Uses tidb_shim connections (pooling + failover).
 """
 import os
 import base64
+import hashlib
 import threading
 import time
 import logging
@@ -28,7 +29,13 @@ def _get_key():
     if _KEY is None:
         raw = os.environ.get("FILE_CRYPT_KEY", "")
         if raw:
-            _KEY = base64.urlsafe_b64decode(raw)
+            try:
+                _KEY = base64.urlsafe_b64decode(raw)
+            except Exception:
+                _KEY = None
+            if not _KEY or len(_KEY) not in (16, 24, 32):
+                # not a valid base64 key of the right size - derive 32 bytes
+                _KEY = hashlib.sha256(raw.encode("utf-8")).digest()
     return _KEY
 
 

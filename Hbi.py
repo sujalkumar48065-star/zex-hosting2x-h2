@@ -238,6 +238,7 @@ ADMIN_COMMAND_BUTTONS_LAYOUT_USER_SPEC = [
     ["⛔ ʟᴏᴄᴋ", "♻️ ʀᴜɴ ᴀʟʟ"],
     ["🛡️ ᴀᴅᴍɪɴ", "👥 ᴜꜱᴇʀꜱ"],
     ["🔧 ꜱᴇᴛᴛɪɴɢ", "📡 ᴄʜᴀɴɴᴇʟ"],
+    ["⏹ ꜱᴛᴏᴘ ᴀʟʟ", "🧹 ᴄʟᴇᴀɴᴜᴘ"],
     ["📡 ᴜᴘᴅᴀᴛᴇꜱ"],
     ["💬 ᴅᴇᴠᴇʟᴏᴘᴇʀ"]
 ]
@@ -2640,6 +2641,14 @@ def create_admin_settings_menu():
         types.InlineKeyboardButton('🧹 ᴄʟᴇᴀɴᴜᴘ', callback_data='cleanup_files'),
         types.InlineKeyboardButton('📋 ɪɴꜱᴛᴀʟʟ ʟᴏɢꜱ', callback_data='install_logs')
     )
+    markup.row(
+        types.InlineKeyboardButton('⏹ ꜱᴛᴏᴘ ᴀʟʟ', callback_data='stop_all_scripts'),
+        types.InlineKeyboardButton('♻️ ʀᴜɴ ᴀʟʟ', callback_data='run_all_scripts')
+    )
+    markup.row(
+        types.InlineKeyboardButton('💾 ꜱᴛᴏʀᴀɢᴇ', callback_data='storage_info'),
+        types.InlineKeyboardButton('🔄 ʀᴇʙᴏᴏᴛ', callback_data='reboot_bot')
+    )
     markup.row(types.InlineKeyboardButton('↩️ ʙᴀᴄᴋ', callback_data='back_to_main'))
     return markup
 
@@ -3280,8 +3289,8 @@ def _logic_subscriptions_panel(message):
         return
     bot.reply_to(message, "\U0001F4B3 subscription zone\npick an action below \U0001F447", reply_markup=create_subscription_menu())
 
-def _logic_statistics(message):
-    user_id = message.from_user.id
+def _logic_statistics(message, uid=None):
+    user_id = uid if uid is not None else getattr(message, 'from_user', None).id
     
     if is_user_banned(user_id):
         bot.reply_to(message, "\u26D4 your account is restricted from this bot.")
@@ -3501,6 +3510,16 @@ def _logic_run_all_scripts(message_or_call):
 
     reply_func(summary_msg, parse_mode='Markdown')
     logger.info(f"Run all scripts finished. Admin: {admin_user_id}. Started: {started_count}. Skipped/Errors: {skipped_files}")
+
+# --- Stop all running hosted scripts (OWNER/ADMIN) ---
+def _logic_stop_all(message):
+    if not _require_owner(message):
+        bot.reply_to(message, "\U0001F512 staff only area.")
+        return
+    stopped = _stop_all_scripts()
+    bot.reply_to(message, f"\u23F9\ufe0F stopped **{stopped}** hosted process(es).\n"
+                          f"use ♻️ **run all** to bring them back when needed.",
+                  parse_mode='Markdown')
 
 # --- New Admin Functions for Channel Management ---
 def _logic_manage_mandatory_channels(message):
@@ -4350,6 +4369,8 @@ BUTTON_TEXT_TO_LOGIC = {
     "📮 ʙʀᴏᴀᴅᴄᴀꜱᴛ": _logic_broadcast_init,
     "⛔ ʟᴏᴄᴋ": _logic_toggle_lock_bot,
     "♻️ ʀᴜɴ ᴀʟʟ": _logic_run_all_scripts,
+    "⏹ ꜱᴛᴏᴘ ᴀʟʟ": _logic_stop_all,
+    "🧹 ᴄʟᴇᴀɴᴜᴘ": _logic_owner_cleanup,
     "🛡️ ᴀᴅᴍɪɴ": _logic_admin_panel,
     "📡 ᴄʜᴀɴɴᴇʟ": _logic_manage_mandatory_channels,
     "👥 ᴜꜱᴇʀꜱ": _logic_user_management,
@@ -4585,6 +4606,9 @@ def handle_callbacks(call):
         elif data == 'bot_performance': admin_required_callback(call, bot_performance_callback)
         elif data == 'cleanup_files': admin_required_callback(call, cleanup_files_callback)
         elif data == 'install_logs': admin_required_callback(call, install_logs_callback)
+        elif data == 'stop_all_scripts': admin_required_callback(call, stop_all_scripts_callback)
+        elif data == 'storage_info': admin_required_callback(call, storage_info_callback)
+        elif data == 'reboot_bot': admin_required_callback(call, reboot_bot_callback)
         elif data == 'admin_install': admin_required_callback(call, admin_install_callback)
         # --- Mandatory Channels Callbacks ---
         elif data == 'manage_mandatory_channels': admin_required_callback(call, manage_mandatory_channels_callback)
@@ -5240,7 +5264,7 @@ def subscription_management_callback(call):
 
 def stats_callback(call): # Called by user and admin
     bot.answer_callback_query(call.id)
-    _logic_statistics(call.message) 
+    _logic_statistics(call.message, uid=call.from_user.id)
     try:
         bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id,
                                       reply_markup=create_main_menu_inline(call.from_user.id))
@@ -5948,16 +5972,48 @@ def bot_performance_callback(call):
 def cleanup_files_callback(call):
     bot.answer_callback_query(call.id, "🧹 Cleaning up temporary files...")
     try:
-        cleaned_dirs, cleaned_files, cleaned_temp = _perform_hosting_cleanup()
+        cleaned_dirs, cleaned_files, cleaned_temp, cleaned_web, killed_zombies = _perform_hosting_cleanup()
         result_msg = (f"🧹 **Cleanup Complete:**\n"
                       f"• Removed empty directories: {cleaned_dirs}\n"
                       f"• Cleared old log files: {cleaned_files}\n"
-                      f"• Removed stale temp dirs: {cleaned_temp}")
+                      f"• Removed stale temp dirs: {cleaned_temp}\n"
+                      f"• Removed stale web dirs: {cleaned_web}\n"
+                      f"• Killed dead/zombie sessions: {killed_zombies}")
         bot.edit_message_text(result_msg, call.message.chat.id, call.message.message_id,
                               reply_markup=create_admin_settings_menu(), parse_mode='Markdown')
     except Exception as e:
         logger.error(f"Error during cleanup: {e}", exc_info=True)
         bot.edit_message_text(f"🧹 cleanup problem: {e}", call.message.chat.id, call.message.message_id)
+
+def stop_all_scripts_callback(call):
+    bot.answer_callback_query(call.id)
+    stopped = _stop_all_scripts()
+    txt = f"⏹ stopped **{stopped}** hosted process(es)."
+    try:
+        bot.edit_message_text(txt, call.message.chat.id, call.message.message_id,
+                              reply_markup=create_admin_settings_menu(), parse_mode='Markdown')
+    except Exception as e:
+        logger.error(f"Error in stop_all callback: {e}")
+
+def storage_info_callback(call):
+    bot.answer_callback_query(call.id)
+    try:
+        call.message.from_user = call.from_user
+    except Exception: pass
+    _logic_owner_storage(call.message)
+
+def reboot_bot_callback(call):
+    bot.answer_callback_query(call.id)
+    try:
+        call.message.from_user = call.from_user
+    except Exception: pass
+    try:
+        _logic_owner_reboot(call.message)
+    except Exception as e:
+        logger.error(f"Error in reboot callback: {e}")
+        try:
+            bot.edit_message_text(f"❌ reboot problem: {e}", call.message.chat.id, call.message.message_id)
+        except Exception: pass
 
 def install_logs_callback(call):
     bot.answer_callback_query(call.id)
