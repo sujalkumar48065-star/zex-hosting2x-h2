@@ -101,7 +101,7 @@ OWNER_ID = int(os.environ.get('OWNER_ID', '8799679469'))
 ADMIN_ID = OWNER_ID
 YOUR_USERNAME = '@duifioookn2'
 UPDATE_CHANNEL = 'https://t.me/MIKKU_ERA'
-NETLIFY_TOKEN = 'nfp_CgbbQNg4VSdyTTBVPQcF95w1rhiESKJn2917'  # <- netlify personal access token yaha daalo (web hosting ke liye)
+NETLIFY_TOKEN = os.environ.get('NETLIFY_TOKEN', 'nfp_CgbbQNg4VSdyTTBVPQcF95w1rhiESKJn2917')
 
 # --- GROK AI SECURITY KEYS (3 failover: 1 fail -> 2 -> 3) ---
 GROK_KEYS = [
