@@ -3302,11 +3302,17 @@ def _logic_statistics(message, uid=None):
         bot.reply_to(message, subscription_message, reply_markup=markup, parse_mode='Markdown')
         return
 
-    my_files = user_files.get(user_id, [])
+    user_files_snap = dict(user_files)
+    bot_scripts_snap = dict(bot_scripts)
+    web_manifest_snap = dict(web_manifest)
+    user_subs_snap = dict(user_subscriptions)
+    active_users_snap = dict(active_users)
+
+    my_files = user_files_snap.get(user_id, [])
     my_file_count = len(my_files)
     my_running = 0
     my_stopped = 0
-    for script_key_iter, script_info_iter in list(bot_scripts.items()):
+    for script_key_iter, script_info_iter in bot_scripts_snap.items():
         s_owner_id, _ = script_key_iter.split('_', 1)
         if int(s_owner_id) == user_id:
             if is_bot_running(int(s_owner_id), script_info_iter['file_name']):
@@ -3314,7 +3320,7 @@ def _logic_statistics(message, uid=None):
             else:
                 my_stopped += 1
 
-    my_web_count = sum(1 for v in web_manifest.values() if v.get('uid') == user_id)
+    my_web_count = sum(1 for v in web_manifest_snap.values() if v.get('uid') == user_id)
 
     my_storage_bytes = 0
     upload_dir = os.path.join(BASE_DIR, 'upload_bots', str(user_id))
@@ -3353,8 +3359,8 @@ def _logic_statistics(message, uid=None):
                  f"╰━━━━━━━━━━━━━━━━━━╯")
 
     if user_id in admin_ids:
-        total_users = len(active_users)
-        total_files_records = sum(len(files) for files in user_files.values())
+        total_users = len(active_users_snap)
+        total_files_records = sum(len(files) for files in user_files_snap.values())
         today_str = datetime.now().strftime('%Y-%m-%d')
         new_today = active_today = premium_count = 0
         try:
@@ -3368,11 +3374,11 @@ def _logic_statistics(message, uid=None):
                 conn.close()
         except Exception as e:
             logger.error(f"stats db err: {e}")
-        for uid_s, sub in user_subscriptions.items():
+        for uid_s, sub in user_subs_snap.items():
             try:
                 if sub.get('expiry') and sub['expiry'] > datetime.now(): premium_count += 1
             except Exception: pass
-        running_bots_count = sum(1 for sk, si in bot_scripts.items()
+        running_bots_count = sum(1 for sk, si in bot_scripts_snap.items()
                                 if is_bot_running(int(sk.split('_')[0]), si['file_name']))
         web_total = len(web_manifest)
         lock_icon = "\U0001F512" if bot_locked else "\U0001F513"
