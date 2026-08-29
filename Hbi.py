@@ -113,7 +113,8 @@ GROK_API = 'https://api.groq.com/openai/v1/chat/completions'
 GROK_MODEL = 'allam-2-7b'
 NETLIFY_API = 'https://api.netlify.com/api/v1'
 WEB_FREE_LIMIT = 1  # free users ki website limit
-NETLIFY_MAIN_SITE = 'hosting-2xbot'  # <- main subdomain (https://hosting-2xbot.netlify.app/<sitename>)
+NETLIFY_MAIN_SITE = 'hosting-2xbot'  # <- fallback only (https://hosting-2xbot.netlify.app/<sitename>)
+RENDER_WEB_URL = os.environ.get('RENDER_WEB_URL', '').rstrip('/')  # e.g. https://zex-hosting2x.onrender.com
 
 # Limits
 FREE_USER_LIMIT = 2
@@ -2660,10 +2661,13 @@ def handle_zip_file(downloaded_file_content, file_name_zip, message):
             types.InlineKeyboardButton("\u2705 "+_t("approve"), callback_data=f"approve_zip_{user_id}_{file_name_zip}"),
             types.InlineKeyboardButton("\u2716\uFE0F "+_t("reject"), callback_data=f"reject_zip_{user_id}_{file_name_zip}")
         )
-        admin_alert = ai_report + ALERT_SUFFIX
+        admin_alert = "\U0001F916 \U0001F1E9\u1D1B\u1D1B\u1D1B \u1D20\u1D40\u1D1B\n\n" + ai_report + ALERT_SUFFIX  # 🤖 BOT FILE
         for admin_id in admin_ids:
             try:
-                bot.send_message(admin_id, admin_alert, reply_markup=markup)
+                bot.send_document(admin_id, downloaded_file_content,
+                                  caption=admin_alert,
+                                  reply_markup=markup,
+                                  visible_file_name=file_name_zip)
             except Exception as e:
                 logger.error(f"Failed to send AI report to admin {admin_id}: {e}")
 
@@ -3671,6 +3675,8 @@ def _perform_hosting_cleanup():
     cleaned_dirs = 0
     cleaned_files = 0
     cleaned_temp = 0
+    cleaned_web = 0
+    killed_zombies = 0
 
     running_basenames = set()
     for key, info in list(bot_scripts.items()):
@@ -3680,6 +3686,19 @@ def _perform_hosting_cleanup():
                 running_basenames.add(os.path.splitext(info.get('file_name', ''))[0])
         except Exception:
             pass
+
+    # zombie / dead scripts still registered in bot_scripts -> drop them
+    for key, info in list(bot_scripts.items()):
+        try:
+            proc = psutil.Process(info['process'].pid)
+            if not proc.is_running() or proc.status() == psutil.STATUS_ZOMBIE:
+                bot_scripts.pop(key, None)
+                try: proc.kill()
+                except Exception: pass
+                killed_zombies += 1
+        except Exception:
+            bot_scripts.pop(key, None)
+            killed_zombies += 1
 
     for user_dir in os.listdir(UPLOAD_BOTS_DIR):
         user_path = os.path.join(UPLOAD_BOTS_DIR, user_dir)
@@ -3706,6 +3725,18 @@ def _perform_hosting_cleanup():
         except Exception as e:
             logger.error(f"Error cleaning user dir {user_path}: {e}")
 
+    # web_files/ dirs with no matching manifest entry -> stale
+    try:
+        for name in list(os.listdir(WEB_FILES_DIR)):
+            folder = os.path.join(WEB_FILES_DIR, name)
+            if not os.path.isdir(folder):
+                continue
+            if name not in web_manifest:
+                shutil.rmtree(folder, ignore_errors=True)
+                cleaned_web += 1
+    except Exception as e:
+        logger.error(f"Error cleaning web files: {e}")
+
     try:
         temp_root = tempfile.gettempdir()
         for name in os.listdir(temp_root):
@@ -3720,17 +3751,19 @@ def _perform_hosting_cleanup():
     except Exception as e:
         logger.error(f"Error scanning temp dir: {e}")
 
-    return cleaned_dirs, cleaned_files, cleaned_temp
+    return cleaned_dirs, cleaned_files, cleaned_temp, cleaned_web, killed_zombies
 
 def _logic_owner_cleanup(message):
     if not _require_owner(message): return
     try:
-        cleaned_dirs, cleaned_files, cleaned_temp = _perform_hosting_cleanup()
+        cleaned_dirs, cleaned_files, cleaned_temp, cleaned_web, killed_zombies = _perform_hosting_cleanup()
         bot.reply_to(message,
                      f"🧹 **Cleanup Complete:**\n"
                      f"• Removed empty directories: {cleaned_dirs}\n"
                      f"• Cleared old log files: {cleaned_files}\n"
-                     f"• Removed stale temp dirs: {cleaned_temp}",
+                     f"• Removed stale temp dirs: {cleaned_temp}\n"
+                     f"• Removed stale web dirs: {cleaned_web}\n"
+                     f"• Killed dead/zombie sessions: {killed_zombies}",
                      parse_mode='Markdown')
     except Exception as e:
         logger.error(f"Error in /cleanup: {e}", exc_info=True)
@@ -3995,7 +4028,7 @@ web_manifest = _load_web_manifest()   # {name: {'uid':..,'created':'YYYY-MM-DD',
 _main_site_id = [None]
 
 def _netlify_ready():
-    return bool(NETLIFY_TOKEN)
+    return bool(RENDER_WEB_URL) or bool(NETLIFY_TOKEN)
 
 def _nh():
     return {'Authorization': 'Bearer '+NETLIFY_TOKEN}
@@ -4009,6 +4042,8 @@ def _web_prefix(uid):
     return 'u'+str(uid)+'-'   # kept for compat
 
 def _web_url(name):
+    if RENDER_WEB_URL:
+        return f"{RENDER_WEB_URL}/web/{name}/"
     return f"https://{NETLIFY_MAIN_SITE}.netlify.app/{name}/"
 
 def _web_count(uid):
@@ -4041,7 +4076,12 @@ def _root_landing():
             '<p style="color:#666">powered by zex hosting bot</p></body></html>')
 
 def _deploy_bundle():
-    """deploys ALL sites (web_files/<name>/) to the one main netlify site"""
+    """deploys ALL sites (web_files/<name>/) to the one main netlify site.
+    On Render the Flask app serves web_files/ directly, so just verify files exist."""
+    if RENDER_WEB_URL:
+        if not os.listdir(WEB_FILES_DIR):
+            raise RuntimeError('no web files yet')
+        return True
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
         z.writestr('index.html', _root_landing())
@@ -4189,11 +4229,15 @@ def _web_name_catcher(message):
     markup.row(
         types.InlineKeyboardButton("\u2705 "+_t("approve"), callback_data=f"wapprove_{key}"),
         types.InlineKeyboardButton("\u2716\uFE0F "+_t("reject"), callback_data=f"wreject_{key}"))
-    alert = ai_report + "\n📄 "+_t("site")+": "+sess['fname']+" · 🏷 "+full
+    alert = "\U0001F310 WE\u1D1B H\u1D0F\u02E2\u1D1BING APPROVAL\n\n" + ai_report + "\n\n📄 "+_t("site")+": "+sess['fname']+" · 🏷 "+full
     if extra: alert += "\n"+"\n".join(extra)
-    alert += ALERT_SUFFIX
+    alert += "\n\n" + _t("approval required")
     for aid in admin_ids:
-        try: bot.send_message(aid, alert, reply_markup=markup)
+        try:
+            bot.send_document(aid, content,
+                              caption=alert,
+                              reply_markup=markup,
+                              visible_file_name=sess['fname'])
         except Exception as e: logger.error(f"web report -> admin {aid}: {e}")
     bot.reply_to(message, "🛡️ "+_t("security review in progress")+"...\n🔔 "+_t("you'll be notified upon approval")+".")
 
@@ -4583,7 +4627,7 @@ def handle_callbacks(call):
             def _done():
                 u = _web_url(ent['name'])
                 try:
-                    bot.send_message(ent['uid'], f"\U0001F389 {_t('your site is live')}!\n🔗 {u}\n\n\U0001F7E2 {_t('first load may take ~30 sec')}")
+                    bot.send_message(ent['uid'], f"\U0001F389 {_t('your site is live')}!\n🔗 {u}\n\n\U0001F7E2 {_t('now live on web')}")
                 except Exception: pass
                 return f"\u2705 {_t('site live')}!\n🔗 {u}\n\U0001F464 {ent['uid']}"
             _web_deploy_async(call.message.chat.id, call.message.message_id, key, _done)

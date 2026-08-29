@@ -89,6 +89,38 @@ def _h2_health():
     return "ok"
 
 
+@hx.app.route("/web/<name>/", defaults={"sub": ""})
+@hx.app.route("/web/<name>/<path:sub>")
+def _h2_web_site(name, sub):
+    import os as _os
+    import pathlib as _pl
+    from flask import send_from_directory, abort
+    site_dir = _os.path.join(hx.WEB_FILES_DIR, name)
+    if not _os.path.isdir(site_dir):
+        abort(404)
+    if not sub:
+        sub = "index.html"
+    rel = _pl.PurePosixPath(sub)
+    if rel.is_absolute() or ".." in rel.parts:
+        abort(404)
+    full = _os.path.join(site_dir, rel.as_posix())
+    if not _os.path.isfile(full):
+        abort(404)
+    return send_from_directory(site_dir, rel.as_posix())
+
+
+@hx.app.route("/web/")
+def _h2_web_index():
+    from flask import Response
+    rows = "".join(f'<li><a href="{n}/">{n}</a></li>' for n in sorted(hx.web_manifest))
+    html = ('<!DOCTYPE html><html><head><meta charset="utf-8"><title>ZEX WEB HOST</title>'
+            '<style>body{background:#0b0f1a;color:#7df9ff;font-family:monospace;text-align:center;padding-top:60px}'
+            'a{color:#ffd166}ul{list-style:none;padding:0}</style></head>'
+            '<body><h1>🌐 ZEX WEB HOST</h1><p>live sites:</p><ul>' + rows + '</ul>'
+            '<p style="color:#666">powered by zex hosting bot</p></body></html>')
+    return Response(html, mimetype="text/html")
+
+
 if __name__ == "__main__":
     threading.Thread(target=_keep_alive_self_ping, daemon=True).start()
     log.info("Self-ping keep-alive started (every 240s).")
