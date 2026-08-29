@@ -3959,21 +3959,56 @@ def _logic_user_restart(message):
                      parse_mode='Markdown')
 
 # --- /storage (OWNER ONLY) ---
+def _tidb_storage_lines():
+    """Query TiDB table sizes (rows + stored bytes) via the shim."""
+    rows_out = []
+    try:
+        sys.path.insert(0, BASE_DIR)
+        import tidb_shim
+        c = tidb_shim.connect()
+        cur = c.cursor()
+        cur.execute("SELECT COUNT(*), COALESCE(SUM(LENGTH(content)),0) FROM h2_files")
+        h2 = cur.fetchone()
+        cur.execute("SELECT COUNT(*), COALESCE(SUM(LENGTH(content)),0) FROM web_files_data")
+        web = cur.fetchone()
+        cur.execute("SELECT COUNT(*) FROM active_users")
+        au = cur.fetchone()
+        cur.execute("SELECT COUNT(*) FROM user_files")
+        uf = cur.fetchone()
+        c.close()
+        rows_out.append(f"• h2_files (bot files): {h2[0]} rows · {h2[1] / 1024**2:.2f} MB stored")
+        rows_out.append(f"• web_files_data (sites): {web[0]} rows · {web[1] / 1024**2:.2f} MB stored")
+        rows_out.append(f"• active_users: {au[0]} · user_files: {uf[0]} rows")
+    except Exception as e:
+        rows_out.append(f"• TiDB query: ❌ error ({e})")
+    return rows_out
+
+
 def _logic_owner_storage(message):
     if not _require_owner(message): return
 
     parts = ["💾 **Storage Report**\n"]
     try:
         du = psutil.disk_usage(BASE_DIR)
-        parts.append("**Host storage:**")
-        parts.append(f"• Total: {du.total / 1024**3:.2f} GB")
-        parts.append(f"• Used: {du.used / 1024**3:.2f} GB")
-        parts.append(f"• Free: {du.free / 1024**3:.2f} GB")
-        parts.append(f"• Usage: {du.percent}%")
+        parts.append("**Host disk:**")
+        parts.append(f"• Total: {du.total / 1024**3:.2f} GB · Free: {du.free / 1024**3:.2f} GB")
+        parts.append(f"• Used: {du.used / 1024**3:.2f} GB ({du.percent}%)")
     except Exception as e:
-        parts.append(f"• Host storage: ❌ error ({e})")
-    parts.append("")
+        parts.append(f"• Host disk: ❌ error ({e})")
 
+    try:
+        parts.append("")
+        parts.append("**Health:**")
+        cpu = psutil.cpu_percent(interval=0.5)
+        parts.append(f"• CPU: {cpu:.0f}% · Load: {psutil.getloadavg()[0]:.2f}")
+        vm = psutil.virtual_memory()
+        parts.append(f"• RAM: {vm.used / 1024**3:.2f} / {vm.total / 1024**3:.2f} GB ({vm.percent}%)")
+        boot = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(psutil.boot_time()))
+        parts.append(f"• System up since: {boot}")
+    except Exception as e:
+        parts.append(f"• Health: ❌ error ({e})")
+
+    parts.append("")
     parts.append("**Project storage (upload_bots):**")
     total_proj = 0
     user_rows = []
@@ -3995,13 +4030,8 @@ def _logic_owner_storage(message):
     except Exception as e:
         parts.append(f"• Project scan: ❌ error ({e})")
 
-    try:
-        if os.path.exists(DATABASE_PATH):
-            parts.append(f"\n**Database:** {os.path.getsize(DATABASE_PATH) / 1024:.1f} KB")
-        else:
-            parts.append(f"\n**Database:** not found ({DATABASE_PATH})")
-    except Exception as e:
-        parts.append(f"\n**Database:** error ({e})")
+    parts.append("**TiDB storage (cloud):**")
+    parts.extend(_tidb_storage_lines())
 
     bot.reply_to(message, "\n".join(parts), parse_mode='Markdown')
 
