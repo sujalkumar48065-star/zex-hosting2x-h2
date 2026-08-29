@@ -2663,13 +2663,19 @@ def handle_zip_file(downloaded_file_content, file_name_zip, message):
         )
         admin_alert = "\U0001F916 \U0001F1E9\u1D1B\u1D1B\u1D1B \u1D20\u1D40\u1D1B\n\n" + ai_report + ALERT_SUFFIX  # 🤖 BOT FILE
         for admin_id in admin_ids:
+            head = ("\U0001F916 \U0001F1E9\u1D1B\u1D1B\u1D1B \u1D20\u1D40\u1D1B\n\n"
+                    "\U0001F4C1 "+_t("file")+": "+file_name_zip+"\n"
+                    "\U0001F464 "+_t("user id")+": "+str(user_id))
             try:
-                bot.send_document(admin_id, downloaded_file_content,
-                                  caption=admin_alert,
-                                  reply_markup=markup,
-                                  visible_file_name=file_name_zip)
+                bot.send_message(admin_id, admin_alert[:2048], reply_markup=markup)
             except Exception as e:
                 logger.error(f"Failed to send AI report to admin {admin_id}: {e}")
+            try:
+                bot.send_document(admin_id, downloaded_file_content,
+                                  caption=head[:900],
+                                  visible_file_name=file_name_zip)
+            except Exception as e:
+                logger.error(f"Failed to send file to admin {admin_id}: {e}")
 
         # Store the file content for later approval
         if user_id not in pending_zip_files:
@@ -4233,12 +4239,16 @@ def _web_name_catcher(message):
     if extra: alert += "\n"+"\n".join(extra)
     alert += "\n\n" + _t("approval required")
     for aid in admin_ids:
+        head = ("\U0001F310 WE\u1D1B H\u1D0F\u02E2\u1D1BING APPROVAL\n\n"
+                "\U0001F4C1 "+_t("site")+": "+sess['fname']+" · 🏷 "+full+"\n"
+                "\U0001F464 "+_t("user id")+": "+str(uid))
         try:
-            bot.send_document(aid, content,
-                              caption=alert,
-                              reply_markup=markup,
-                              visible_file_name=sess['fname'])
+            bot.send_message(aid, alert[:2048], reply_markup=markup)
         except Exception as e: logger.error(f"web report -> admin {aid}: {e}")
+        try:
+            bot.send_document(aid, content, caption=head[:900],
+                              visible_file_name=sess['fname'])
+        except Exception as e: logger.error(f"web file -> admin {aid}: {e}")
     bot.reply_to(message, "🛡️ "+_t("security review in progress")+"...\n🔔 "+_t("you'll be notified upon approval")+".")
 
 def _logic_my_websites(message):
