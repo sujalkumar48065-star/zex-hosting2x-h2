@@ -3375,7 +3375,7 @@ def _logic_statistics_impl(message, uid=None):
     bot_scripts_snap = dict(bot_scripts)
     web_manifest_snap = dict(web_manifest)
     user_subs_snap = dict(user_subscriptions)
-    active_users_snap = dict(active_users)
+    active_users_snap = set(active_users)
     gh_manifest_snap = dict(gh_manifest)
 
     my_files = user_files_snap.get(user_id, [])
