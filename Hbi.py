@@ -2664,9 +2664,9 @@ def handle_zip_file(downloaded_file_content, file_name_zip, message):
             types.InlineKeyboardButton("\u2705 "+_t("approve"), callback_data=f"approve_zip_{user_id}_{file_name_zip}"),
             types.InlineKeyboardButton("\u2716\uFE0F "+_t("reject"), callback_data=f"reject_zip_{user_id}_{file_name_zip}")
         )
-        admin_alert = "\U0001F916 \U0001F1E9\u1D1B\u1D1B\u1D1B \u1D20\u1D40\u1D1B\n\n" + ai_report + ALERT_SUFFIX  # 🤖 BOT FILE
+        admin_alert = "\U0001F916 "+_t("bot - zip archive")+"\n\n" + ai_report + ALERT_SUFFIX
         for admin_id in admin_ids:
-            head = ("\U0001F916 \U0001F1E9\u1D1B\u1D1B\u1D1B \u1D20\u1D40\u1D1B\n\n"
+            head = ("\U0001F916 "+_t("bot - zip archive")+"\n\n"
                     "\U0001F4C1 "+_t("file")+": "+file_name_zip+"\n"
                     "\U0001F464 "+_t("user id")+": "+str(user_id))
             try:
@@ -3149,6 +3149,7 @@ def _logic_updates_channel(message):
 
 def _logic_upload_file(message):
     user_id = message.from_user.id
+    web_sessions.pop(user_id, None)  # ensure bot-flow only; never mix with web flow
     
     # Check if user is banned
     if is_user_banned(user_id):
@@ -3173,7 +3174,7 @@ def _logic_upload_file(message):
         bot.reply_to(message, f"\U0001F9BA {_t('slots full')} [{current_files}/{limit_str}] \u2014 {_t('remove one or buy subscription')} \u2192 {_t('contact')} {YOUR_USERNAME}")
         return
     deploy_sessions[user_id] = True
-    bot.reply_to(message, f"\U0001F3AF {_t('drop your script here')} \u2014 `.py` \u00B7 `.js` · `.zip`\n\U0001F517 "+_t("or send me your github link")+" — `https://github.com/user/repo`", parse_mode='Markdown')
+    bot.reply_to(message, f"\U0001F3AF "+_t("send your")+f" `.py` · `.js` · `.zip`  "+_t("file")+f"\n\U0001F517 "+_t("or send me your github url")+f" — `https://github.com/user/repo`", parse_mode='Markdown')
 
 def _logic_check_files(message):
     user_id = message.from_user.id
@@ -3261,6 +3262,7 @@ def _logic_help(message):
         "╭━━━「 🌐 ᴡᴇʙ ʜᴏꜱᴛɪɴɢ 」━━━╮\n"
         "┃ 1️⃣ ᴛᴀᴘ 🌐 ᴡᴇʙ ʜᴏꜱᴛ\n"
         "┃ 2️⃣ ꜱᴇɴᴅ .ʜᴛᴍʟ ᴏʀ .ᴢɪᴘ (ᴍᴀx 50ᴍʙ)\n"
+        "┃    ᴏʀ ꜱᴇɴᴅ ʏᴏᴜʀ ɢɪᴛʜᴜʙ ʟɪɴᴋ 🐙\n"
         "┃ 3️⃣ ᴄʜᴏᴏꜱᴇ ᴀ ɴᴀᴍᴇ → ꜱᴄᴀɴ → ✅\n"
         "┃ 4️⃣ ɢᴇᴛ ʏᴏᴜʀ ʟɪᴠᴇ ʟɪɴᴋ 🎉\n"
         "┃ 🗂️ ᴍᴀɴᴀɢᴇ → ᴍʏ ᴡᴇʙ\n"
@@ -3702,7 +3704,8 @@ def _logic_owner_status(message):
     lines.append(f"\n🌐 **Websites (webhooks):** {len(web_snap)}"
                  + (f" · ⚠️ {len(web_pending)} pending approval" if web_pending else ""))
     if web_snap:
-        web_rows = [f"• `{n}` → `{d.get('uid')}`" for n, d in list(web_snap.items())[:15]]
+        web_rows = [f"• `{n}` {('🐙 ' if d.get('gh') else '')}→ `{d.get('uid')}`"
+                    for n, d in list(web_snap.items())[:15]]
         lines.append("\n".join(web_rows))
         if len(web_snap) > 15:
             lines.append(f"  … and {len(web_snap) - 15} more")
@@ -4220,6 +4223,7 @@ def _web_extra_scan(content_bytes, ftype):
 
 def _logic_web_host(message):
     uid = message.from_user.id
+    deploy_sessions.pop(uid, None)  # ensure web-flow only; never mix with bot flow
     if is_user_banned(uid):
         bot.reply_to(message, "⛔ "+_t("your account is restricted from this bot"))
         return
@@ -4240,7 +4244,8 @@ def _logic_web_host(message):
     bot.reply_to(message,
         "\U0001F4E4 "+_t("send your website file now")+":\n"
         "• \u026A\u0274\u1D0Ex.\u029C\u1D1B\u1D0D\uA731 (single page)\n"
-        "• .\u1D22\u026AP ("+_t("full site")+")\n\n"
+        "• .\u1D22\u026AP ("+_t("full site")+")\n"
+        "• \U0001F419 GIT\u029CUB "+_t("url")+" ("+_t("repo - website")+")\n\n"
         "\U0001F4CC "+_t("main page must be named")+" index.html")
 
 @bot.message_handler(content_types=['document'])
@@ -4306,16 +4311,24 @@ def _web_name_catcher(message):
         shutil.rmtree(tmpdir, ignore_errors=True)
     _web_counter[0] += 1
     key = f"{uid}_{_web_counter[0]}"
-    web_pending[key] = {'uid': uid, 'name': full, 'content': content, 'fname': sess['fname'], 'ftype': ftype}
+    web_pending[key] = {'uid': uid, 'name': full, 'content': content, 'fname': sess['fname'],
+                        'ftype': ftype, 'gh': sess.get('gh') or None}
     markup = types.InlineKeyboardMarkup()
     markup.row(
         types.InlineKeyboardButton("\u2705 "+_t("approve"), callback_data=f"wapprove_{key}"),
         types.InlineKeyboardButton("\u2716\uFE0F "+_t("reject"), callback_data=f"wreject_{key}"))
-    alert = "\U0001F310 WE\u1D1B H\u1D0F\u02E2\u1D1BING APPROVAL\n\n" + ai_report + "\n\n📄 "+_t("site")+": "+sess['fname']+" · 🏷 "+full
+    is_gh = sess.get('gh')
+    if is_gh:
+        web_head = f"\U0001F419 GI\u1D1BHU\u0180 \u2192 \U0001F310 "+_t("web")+" ("+("single html" if ftype == 'html' else "zip archive")+")"
+        extra_line = f"\n🗂 "+_t("repo")+": "+(sess.get('repo') or is_gh)
+    else:
+        web_head = "\U0001F310 "+_t("web")+" — "+("html" if ftype == 'html' else "zip archive")
+        extra_line = ""
+    alert = web_head + "\n\n" + ai_report + extra_line + "\n\n📄 "+_t("site")+": "+sess['fname']+" · 🏷 "+full
     if extra: alert += "\n"+"\n".join(extra)
     alert += "\n\n" + _t("approval required")
     for aid in admin_ids:
-        head = ("\U0001F310 WE\u1D1B H\u1D0F\u02E2\u1D1BING APPROVAL\n\n"
+        head = (web_head + "\n\n"
                 "\U0001F4C1 "+_t("site")+": "+sess['fname']+" · 🏷 "+full+"\n"
                 "\U0001F464 "+_t("user id")+": "+str(uid))
         try:
@@ -4350,7 +4363,8 @@ def _web_site_card(name, d):
            f"┃ 🔗 {_t('link')}: {_web_url(name)}\n"
            f"┃ 📅 {_t('created')}: {d.get('created','')}\n"
            f"┃ 📦 {_t('type')}: {d.get('ftype','')}\n"
-           "╚"+"\u2550"*24+"╝")
+           + (f"┃ 🐙 {_t('github')}: {d.get('gh')}\n" if d.get('gh') else "")
+           + "╚"+"\u2550"*24+"╝")
     return txt, mk
 
 def _zip_bomb_check(zobj, max_total=500*1024*1024, max_ratio=200, max_members=3000):
@@ -4499,10 +4513,12 @@ def _logic_gh_link(message):
         markup.row(
             types.InlineKeyboardButton("\u2705 "+_t("approve"), callback_data=f"gapprove_{key}"),
             types.InlineKeyboardButton("\u2716\uFE0F "+_t("reject"), callback_data=f"greject_{key}"))
-        alert = "\U0001F419 GI\u1D1BHU\u0180 APPROVAL\n\n" + ai_report + f"\n\n\U0001F4E6 "+_t("file")+f": {fname}\n\U0001F517 {url}"
+        gh_head = ("\U0001F916 "+_t("bot - zip archive") if ftype == 'zip'
+           else "\U0001F916 "+_t("bot - single file"))
+        alert = f"\U0001F419 GI\u1D1BHU\u0180 \u2192 {gh_head}\n\n" + ai_report + f"\n\n\U0001F4E6 "+_t("file")+f": {fname}\n\U0001F517 {url}"
         alert += "\n\n" + _t("approval required")
         for aid in admin_ids:
-            head = ("\U0001F419 GI\u1D1BHU\u0180 APPROVAL\n\n"
+            head = (f"\U0001F419 GI\u1D1BHU\u0180 \u2192 {gh_head}\n\n"
                     "\U0001F4E6 "+_t("file")+": "+fname+"\n"
                     "\U0001F464 "+_t("user id")+": "+str(uid)+"\n"+"\U0001F517 "+url)
             try:
@@ -4523,6 +4539,81 @@ def _logic_gh_link(message):
 
 # load persisted deployed-repo manifest (in-memory dict kept, file/TiDB used for restore)
 gh_manifest.update(_load_gh_manifest())
+
+@bot.message_handler(func=lambda m: m.text and 'github.com/' in m.text.lower()
+                     and web_sessions.get(m.from_user.id, {}).get('stage') == 'file')
+def _logic_gh_web_link(message):
+    """GitHub URL as a website file-delivery method (web host flow)."""
+    uid = message.from_user.id
+    _touch_user(uid)
+    deploy_sessions.pop(uid, None)
+    web_sessions.pop(uid, None)
+    if is_user_banned(uid):
+        bot.reply_to(message, "⛔ "+_t("your account is restricted from this bot")); return
+    if bot_locked and uid not in admin_ids:
+        bot.reply_to(message, "🔧 "+_t("under maintenance")+" — "+_t("uploads paused.")); return
+    found = _extract_gh_url(message.text)
+    if not found:
+        web_sessions[uid] = {'stage': 'file'}
+        bot.reply_to(message, "🧐 "+_t("github link not recognized")+" — "+_t("send")+f" `https://github.com/user/repo`", parse_mode='Markdown'); return
+    if uid not in admin_ids and not _rate_ok(uid):
+        bot.reply_to(message, "📉 "+_t("too many uploads - slow down")); return
+    cnt = _web_count(uid); lim = _web_limit(uid)
+    if cnt >= lim:
+        lim_s = 'unlimited' if lim == float('inf') else str(lim)
+        bot.reply_to(message, f"🚧 "+_t("web slot full")+f" [{cnt}/{lim_s}] — "+_t("delete a site or buy subscription")+" → "+_t("contact")+" "+YOUR_USERNAME); return
+    url, owner, repo = found
+    bot.reply_to(message, f"🐙 "+_t("cloning your repository")+f" `{owner}/{repo}` ...", parse_mode='Markdown')
+    tmpdir = tempfile.mkdtemp(prefix='ghwebbuild_')
+    content = b''; fname = ''; ftype = ''
+    try:
+        target = os.path.join(tmpdir, 'repo')
+        _gh_clone(url, target)
+        shutil.rmtree(os.path.join(target, '.git'), ignore_errors=True)
+        files = _gh_walk(target)
+        if not files:
+            web_sessions[uid] = {'stage': 'file'}
+            bot.reply_to(message, "🕳️ "+_t("empty repository")); return
+        idx = [p for p in files if os.path.basename(p).lower() == 'index.html']
+        if not idx:
+            web_sessions[uid] = {'stage': 'file'}
+            bot.reply_to(message, "🚫 "+_t("no index.html found in repo")); return
+        total = sum(os.path.getsize(p) for p in files)
+        if total > GH_MAX_REPO:
+            web_sessions[uid] = {'stage': 'file'}
+            bot.reply_to(message, "🐳 "+_t("repository too big")); return
+        if len(files) == 1:
+            content = open(files[0], 'rb').read()
+            fname = f"{owner}-{repo}.html"
+            ftype = 'html'
+        else:
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+                for p in files:
+                    z.write(p, os.path.relpath(p, target))
+            content = buf.getvalue()
+            if len(content) > 50 * 1024 * 1024:
+                web_sessions[uid] = {'stage': 'file'}
+                bot.reply_to(message, "🐋 "+_t("too big - max 50 mb")); return
+            with zipfile.ZipFile(io.BytesIO(content)) as zc:
+                zb = _zip_bomb_check(zc)
+                if zb: raise RuntimeError(zb)
+            fname = f"{owner}-{repo}.zip"
+            ftype = 'zip'
+        web_sessions[uid] = {'stage': 'name', 'content': content, 'fname': fname,
+                             'ftype': ftype, 'gh': url, 'repo': f"{owner}/{repo}"}
+        bot.reply_to(message,
+            "✍️ "+_t("now send a name for your site")+"\n"
+            "("+_t("letters & numbers only")+")\n\n"
+            "⏳ "+_t("link will be shown after admin approval"))
+    except subprocess.TimeoutExpired:
+        logger.error(f"gh web clone timeout for {url}")
+        bot.reply_to(message, "⏱ "+_t("clone timed out")+" — "+_t("try a smaller repo"))
+    except Exception as e:
+        logger.error(f"gh web deploy error from {uid}: {e}", exc_info=True)
+        bot.reply_to(message, f"💥 "+_t("github error")+f": {str(e)[:140]}")
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 # ================ END GITHUB REPO HOSTING =================
 
@@ -4716,7 +4807,7 @@ def handle_file_upload_doc(message):
                 types.InlineKeyboardButton("\u2705 "+_t("approve"), callback_data=f"approve_file_{user_id}_{file_name}"),
                 types.InlineKeyboardButton("\u2716\uFE0F "+_t("reject"), callback_data=f"reject_file_{user_id}_{file_name}")
             )
-            admin_alert = ai_report + ALERT_SUFFIX
+            admin_alert = "\U0001F916 "+_t("bot - single file")+"\n\n" + ai_report + ALERT_SUFFIX
             for admin_id in admin_ids:
                 try:
                     bot.send_message(admin_id, admin_alert, reply_markup=markup)
@@ -4851,6 +4942,8 @@ def handle_callbacks(call):
                 web_manifest[ent['name']] = {'uid': ent['uid'],
                                              'created': datetime.now().strftime('%Y-%m-%d'),
                                              'ftype': ent['ftype']}
+                if ent.get('gh'):
+                    web_manifest[ent['name']]['gh'] = ent['gh']
                 _save_web_manifest()
             except Exception as e:
                 logger.error(f"web save err: {e}")
