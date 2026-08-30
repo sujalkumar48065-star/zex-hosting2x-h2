@@ -197,6 +197,19 @@ def send_message(chat_id, text, *args, **kwargs):
 
 bot.send_message = send_message
 
+def _err_digest(scope, data, uid, exc, extra=""):
+    """Report any handler error straight to the owner so nothing fails silently."""
+    try:
+        import traceback
+        tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        hits = [l.strip() for l in tb.splitlines()
+                if 'Hbi.py' in l or 'Error' in l.lower() or 'raise' in l.lower()][:6]
+        msg = (f"⚠️ {scope} · {data}\n👤 {uid}\n{exc.__class__.__name__}: {str(exc)[:160]}\n"
+               + "\n".join(hits) + ("\n" + extra if extra else ""))
+        bot.send_message(OWNER_ID, msg[:3500])
+    except Exception:
+        pass
+
 _orig_reply_to = bot.reply_to
 def _font_reply_to(message, text, *args, **kwargs):
     if isinstance(text, str) and _SC_RE.search(text) and '**' not in text and '<b>' not in text:
@@ -1913,7 +1926,7 @@ def create_subscription_check_message(not_joined_channels):
         if channel_username:
             channel_link = f"https://t.me/{channel_username.replace('@', '')}"
         else:
-            channel_link = f"https://t.me/c/{channel_id.replace('-100', '')}"
+            channel_link = f"https://t.me/c/{str(channel_id).replace('-100', '')}"
         
         message += f"• {channel_name}\n"
         markup.add(types.InlineKeyboardButton(f"{channel_name}", url=channel_link))
@@ -3325,7 +3338,27 @@ def _logic_subscriptions_panel(message):
         return
     bot.reply_to(message, "\U0001F4B3 subscription zone\npick an action below \U0001F447", reply_markup=create_subscription_menu())
 
+_TODAY_DB_CACHE = {'ts': 0.0, 'new': 0, 'active': 0}
+
 def _logic_statistics(message, uid=None):
+    """Safe wrapper - stats must NEVER die silently."""
+    try:
+        _logic_statistics_impl(message, uid)
+    except Exception as e:
+        logger.error(f"stats failed for uid={uid}: {e}", exc_info=True)
+        try:
+            _err_digest("stats", str(uid), uid, e)
+        except Exception:
+            pass
+        try:
+            if getattr(message, 'chat', None) is not None:
+                bot.reply_to(message, "📊 "+_t("your stats")+" -/ 🎭\n\n⚠️ "+_t("try again in a moment"))
+            else:
+                bot.send_message(uid, "📊 "+_t("your stats")+" -/ 🎭\n\n⚠️ "+_t("try again in a moment"))
+        except Exception:
+            pass
+
+def _logic_statistics_impl(message, uid=None):
     user_id = uid if uid is not None else getattr(message, 'from_user', None).id
     
     if is_user_banned(user_id):
@@ -3350,12 +3383,15 @@ def _logic_statistics(message, uid=None):
     my_running = 0
     my_stopped = 0
     for script_key_iter, script_info_iter in bot_scripts_snap.items():
-        s_owner_id, _ = script_key_iter.split('_', 1)
-        if int(s_owner_id) == user_id:
-            if is_bot_running(int(s_owner_id), script_info_iter['file_name']):
-                my_running += 1
-            else:
-                my_stopped += 1
+        try:
+            s_owner_id, _ = script_key_iter.split('_', 1)
+            if int(s_owner_id) == user_id:
+                if is_bot_running(int(s_owner_id), script_info_iter['file_name']):
+                    my_running += 1
+                else:
+                    my_stopped += 1
+        except Exception as e:
+            logger.error(f"stats per-user loop err: {e}")
 
     my_web_count = sum(1 for v in web_manifest_snap.values() if v.get('uid') == user_id)
     my_gh_count = sum(1 for v in gh_manifest_snap.values() if v.get('uid') == user_id)
@@ -3374,9 +3410,15 @@ def _logic_statistics(message, uid=None):
     else:
         storage_str = f"{my_storage_bytes} B"
 
+    try:
+        _u_sub = user_subscriptions.get(user_id) or {}
+        _is_prem = isinstance(_u_sub, dict) and _u_sub.get('expiry') and (_u_sub['expiry'] > datetime.now())
+    except Exception:
+        _is_prem = False
+
     tier = "👑 " + _t("developer") if user_id == OWNER_ID else \
            "🛡️ " + _t("admin") if user_id in admin_ids else \
-           "💎 " + _t("premium") if user_id in user_subscriptions and user_subscriptions[user_id].get('expiry', datetime.min) > datetime.now() else \
+           "💎 " + _t("premium") if _is_prem else \
            "💠 " + _t("free user")
 
     stats_msg = (f"📊 {_t('your stats')} -/ 🎭\n\n"
@@ -3404,23 +3446,34 @@ def _logic_statistics(message, uid=None):
         total_files_records = sum(len(files) for files in user_files_snap.values())
         today_str = datetime.now().strftime('%Y-%m-%d')
         new_today = active_today = premium_count = 0
-        try:
-            with DB_LOCK:
-                conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
-                c = conn.cursor()
-                c.execute("SELECT COUNT(*) FROM active_users WHERE join_date LIKE ?", (today_str+'%',))
-                new_today = c.fetchone()[0]
-                c.execute("SELECT COUNT(*) FROM active_users WHERE last_seen LIKE ?", (today_str+'%',))
-                active_today = c.fetchone()[0]
-                conn.close()
-        except Exception as e:
-            logger.error(f"stats db err: {e}")
+        if time.time() - _TODAY_DB_CACHE['ts'] > 30:
+            try:
+                with DB_LOCK:
+                    conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
+                    c = conn.cursor()
+                    c.execute("SELECT COUNT(*) FROM active_users WHERE join_date LIKE ?", (today_str+'%',))
+                    new_today = c.fetchone()[0]
+                    c.execute("SELECT COUNT(*) FROM active_users WHERE last_seen LIKE ?", (today_str+'%',))
+                    active_today = c.fetchone()[0]
+                    conn.close()
+                _TODAY_DB_CACHE.update(ts=time.time(), new=new_today, active=active_today)
+            except Exception as e:
+                logger.error(f"stats db err: {e}")
+                new_today = active_today = 0
+        else:
+            new_today = _TODAY_DB_CACHE['new']
+            active_today = _TODAY_DB_CACHE['active']
         for uid_s, sub in user_subs_snap.items():
             try:
                 if sub.get('expiry') and sub['expiry'] > datetime.now(): premium_count += 1
             except Exception: pass
-        running_bots_count = sum(1 for sk, si in bot_scripts_snap.items()
-                                if is_bot_running(int(sk.split('_')[0]), si['file_name']))
+        running_bots_count = 0
+        for _sk, _si in bot_scripts_snap.items():
+            try:
+                if is_bot_running(int(str(_sk).split('_')[0]), _si['file_name']):
+                    running_bots_count += 1
+            except Exception as e:
+                logger.error(f"stats running-bots err: {e}")
         web_total = len(web_manifest)
         lock_icon = "\U0001F512" if bot_locked else "\U0001F513"
         stats_msg += (f"\n\n{'━'*20}\n"
@@ -4710,10 +4763,15 @@ BUTTON_TEXT_TO_LOGIC = {
 
 @bot.message_handler(func=lambda message: message.text in BUTTON_TEXT_TO_LOGIC)
 def handle_button_text(message):
-    if message.from_user: _touch_user(message.from_user.id)
-    logic_func = BUTTON_TEXT_TO_LOGIC.get(message.text)
-    if logic_func: logic_func(message)
-    else: logger.warning(f"Button text '{message.text}' matched but no logic func.")
+    try:
+        if message.from_user: _touch_user(message.from_user.id)
+        logic_func = BUTTON_TEXT_TO_LOGIC.get(message.text)
+        if logic_func: logic_func(message)
+        else: logger.warning(f"Button text '{message.text}' matched but no logic func.")
+    except Exception as e:
+        logger.error(f"Error handling button '{message.text}': {e}", exc_info=True)
+        try: _err_digest("button", message.text, message.from_user.id if message.from_user else 0, e)
+        except Exception: pass
 
 @bot.message_handler(commands=['updateschannel'])
 def command_updates_channel(message): _logic_updates_channel(message)
@@ -4879,15 +4937,20 @@ def handle_callbacks(call):
     # Allow subscription check and back to main without subscription
     if data not in ['check_subscription_status', 'back_to_main', 'manual_install']:
         # Check mandatory subscription for other callbacks
-        is_subscribed, not_joined = check_mandatory_subscription(user_id)
-        if not is_subscribed and user_id not in admin_ids:
-            subscription_message, markup = create_subscription_check_message(not_joined)
-            bot.answer_callback_query(call.id)
-            try:
-                bot.edit_message_text(subscription_message, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='Markdown')
-            except:
-                bot.send_message(call.message.chat.id, subscription_message, reply_markup=markup, parse_mode='Markdown')
-            return
+        try:
+            is_subscribed, not_joined = check_mandatory_subscription(user_id)
+            if not is_subscribed and user_id not in admin_ids:
+                subscription_message, markup = create_subscription_check_message(not_joined)
+                bot.answer_callback_query(call.id)
+                try:
+                    bot.edit_message_text(subscription_message, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='Markdown')
+                except:
+                    bot.send_message(call.message.chat.id, subscription_message, reply_markup=markup, parse_mode='Markdown')
+                return
+        except Exception as e:
+            logger.error(f"sub check err for {user_id}/{data}: {e}", exc_info=True)
+            try: _err_digest("sub_check", data, user_id, e)
+            except Exception: pass
 
     if bot_locked and user_id not in admin_ids and data not in ['back_to_main', 'speed', 'stats', 'check_subscription_status', 'manual_install']:
         bot.answer_callback_query(call.id, "⚠️ Bot locked by admin.", show_alert=True)
@@ -5069,6 +5132,10 @@ def handle_callbacks(call):
         logger.error(f"Error handling callback '{data}' for {user_id}: {e}", exc_info=True)
         try: bot.answer_callback_query(call.id, "Error processing request.", show_alert=True)
         except Exception as e_ans: logger.error(f"Failed to answer callback after error: {e_ans}")
+        try:
+            _err_digest(call.__class__.__name__, data, user_id, e)
+        except Exception:
+            pass
 
 def admin_required_callback(call, func_to_run):
     if call.from_user.id not in admin_ids:
