@@ -68,6 +68,24 @@ def _t(s):
         out = out.replace(f'\x00{i}\x00', tok)
     return out
 
+_SC_RE = re.compile(r"[\u1D00-\u1D7F\u0274\u0299\u029C\u026A\u0262\u01EB\u029F\u0280\u028F\uA730\uA731]")
+_BSC_RE = re.compile(r"(?:[\u1D00-\u1D7F\u0274\u0299\u029C\u026A\u0262\u01EB\u029F\u0280\u028F\uA730\uA731]+(?:[\s\u00B7'\-]+[\u1D00-\u1D7F\u0274\u0299\u029C\u026A\u0262\u01EB\u029F\u0280\u028F\uA730\uA731]+)*)")
+
+def _bold_sc(text):
+    """Wrap small-caps font runs in ** for Telegram Markdown bold (skip if already markup)."""
+    if not isinstance(text, str) or not text:
+        return text
+    if '**' in text or '<b>' in text or not _SC_RE.search(text):
+        return text
+    return _BSC_RE.sub(lambda m: "**" + m.group(0) + "**", text)
+
+def _bold_sc_html(text):
+    """Wrap small-caps font runs in <b>, HTML-escaping raw &, <, >."""
+    t = str(text).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    if not _SC_RE.search(t):
+        return t
+    return _BSC_RE.sub(lambda m: "<b>" + m.group(0) + "</b>", t)
+
 sc_owner="👑 "+_t("developer")
 sc_admin="🛡️ "+_t("admin")
 sc_premium="💎 "+_t("premium")
@@ -141,7 +159,7 @@ bot = telebot.TeleBot(TOKEN)
 
 # --- Global Blockquote Wrapper (har message colored quote me) ---
 def _bq(text):
-    t = str(text)
+    t = _bold_sc(str(text))
     t = t.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
     t = re.sub(r'```(.*?)```', lambda m: '<pre>'+m.group(1)+'</pre>', t, flags=re.S)
     t = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', t, flags=re.S)
@@ -178,6 +196,27 @@ def send_message(chat_id, text, *args, **kwargs):
     return original_send(chat_id, text, *args, **kwargs)
 
 bot.send_message = send_message
+
+_orig_reply_to = bot.reply_to
+def _font_reply_to(message, text, *args, **kwargs):
+    if isinstance(text, str) and _SC_RE.search(text) and '**' not in text and '<b>' not in text:
+        pm = kwargs.get('parse_mode')
+        if pm is None:
+            kwargs['parse_mode'] = 'HTML'
+            text = _bold_sc_html(text)
+        elif 'Markdown' in str(pm):
+            text = _bold_sc(text)
+    return _orig_reply_to(message, text, *args, **kwargs)
+bot.reply_to = _font_reply_to
+
+_orig_send_photo = bot.send_photo
+def _font_send_photo(*args, **kwargs):
+    cap = kwargs.get('caption')
+    if isinstance(cap, str) and _SC_RE.search(cap) and '**' not in cap and '<b>' not in cap and not kwargs.get('parse_mode'):
+        kwargs['parse_mode'] = 'HTML'
+        kwargs['caption'] = _bold_sc_html(cap)
+    return _orig_send_photo(*args, **kwargs)
+bot.send_photo = _font_send_photo
 
 # --- Data structures ---
 bot_scripts = {}
