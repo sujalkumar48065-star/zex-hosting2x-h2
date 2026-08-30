@@ -205,6 +205,12 @@ deploy_sessions = {}  # {user_id: True} - script upload armed via DEPLOY button 
 web_pending = {}      # {approval_key: {...}} waiting for admin decision
 _web_counter = [0]
 
+# --- GitHub Repo Hosting State (separate queue - never mixed with bot/web approvals) ---
+gh_pending = {}       # {approval_key: {...}} waiting for admin decision
+_gh_counter = [0]
+gh_manifest = {}      # deployed github repos {uid_fname: {'uid','url','fname','ftype','added'}}
+GH_MANIFEST_PATH = os.path.join(IROTECH_DIR, 'gh_manifest.json')
+
 # --- Security Settings ---
 SECURITY_CONFIG = {
     'blocked_modules': ['os.system', 'os', 'zipfile', 'subprocess.Popen', 'subprocess', 'eval', 'exec','compile', '__import__'],
@@ -3167,7 +3173,7 @@ def _logic_upload_file(message):
         bot.reply_to(message, f"\U0001F9BA {_t('slots full')} [{current_files}/{limit_str}] \u2014 {_t('remove one or buy subscription')} \u2192 {_t('contact')} {YOUR_USERNAME}")
         return
     deploy_sessions[user_id] = True
-    bot.reply_to(message, f"\U0001F3AF {_t('drop your script here')} \u2014 `.py` \u00B7 `.js` · `.zip`")
+    bot.reply_to(message, f"\U0001F3AF {_t('drop your script here')} \u2014 `.py` \u00B7 `.js` · `.zip`\n\U0001F517 "+_t("or send me your github link")+" — `https://github.com/user/repo`", parse_mode='Markdown')
 
 def _logic_check_files(message):
     user_id = message.from_user.id
@@ -3246,6 +3252,7 @@ def _logic_help(message):
         "╭━━━「 🤖 ʙᴏᴛ ʜᴏꜱᴛɪɴɢ 」━━━╮\n"
         "┃ 1️⃣ ᴛᴀᴘ ⬆️ ᴅᴇᴘʟᴏʏ ʙᴏᴛ\n"
         "┃ 2️⃣ ꜱᴇɴᴅ .ᴘʏ · .ᴊꜱ · .ᴢɪᴘ (ᴍᴀx 20ᴍʙ)\n"
+        "┃    ᴏʀ ꜱᴇɴᴅ ʏᴏᴜʀ ɢɪᴛʜᴜʙ ʟɪɴᴋ 🐙\n"
         "┃ 3️⃣ 🛡️ ᴀɪ ꜱᴄᴀɴ → ᴀᴅᴍɪɴ ✅\n"
         "┃ 4️⃣ ʙᴏᴛ ᴀᴜᴛᴏ-ꜱᴛᴀʀᴛ ⚡\n"
         "┃ ▶️ ꜱᴛᴀʀᴛ · ⏹ ꜱᴛᴏᴘ · 🔄 ʀᴇꜱᴛᴀʀᴛ · 📜 ʟᴏɢꜱ\n"
@@ -3295,6 +3302,7 @@ def _logic_statistics(message, uid=None):
     web_manifest_snap = dict(web_manifest)
     user_subs_snap = dict(user_subscriptions)
     active_users_snap = dict(active_users)
+    gh_manifest_snap = dict(gh_manifest)
 
     my_files = user_files_snap.get(user_id, [])
     my_file_count = len(my_files)
@@ -3309,6 +3317,7 @@ def _logic_statistics(message, uid=None):
                 my_stopped += 1
 
     my_web_count = sum(1 for v in web_manifest_snap.values() if v.get('uid') == user_id)
+    my_gh_count = sum(1 for v in gh_manifest_snap.values() if v.get('uid') == user_id)
 
     my_storage_bytes = 0
     upload_dir = os.path.join(BASE_DIR, 'upload_bots', str(user_id))
@@ -3344,6 +3353,9 @@ def _logic_statistics(message, uid=None):
                  f"╰━━━━━━━━━━━━━━━━━━╯\n\n"
                  f"╭━━━「 🌐 {_t('websites')} 」━━━╮\n"
                  f"┃ 🌐 {_t('sites')} : {my_web_count}\n"
+                 f"╰━━━━━━━━━━━━━━━━━━╯\n\n"
+                 f"╭━━━「 🐙 github 」━━━╮\n"
+                 f"┃ 🐙 {_t('repos')} : {my_gh_count}\n"
                  f"╰━━━━━━━━━━━━━━━━━━╯")
 
     if user_id in admin_ids:
@@ -3683,6 +3695,27 @@ def _logic_owner_status(message):
         lines.append("**Failed/Crashed:**\n" + fmt(failed))
     if stopped:
         lines.append("**Stopped:**\n" + fmt(stopped))
+
+    # --- Websites (webhooks) - separate section ---
+    web_snap = dict(web_manifest)
+    gh_snap = dict(gh_manifest)
+    lines.append(f"\n🌐 **Websites (webhooks):** {len(web_snap)}"
+                 + (f" · ⚠️ {len(web_pending)} pending approval" if web_pending else ""))
+    if web_snap:
+        web_rows = [f"• `{n}` → `{d.get('uid')}`" for n, d in list(web_snap.items())[:15]]
+        lines.append("\n".join(web_rows))
+        if len(web_snap) > 15:
+            lines.append(f"  … and {len(web_snap) - 15} more")
+
+    # --- GitHub repos - separate section ---
+    lines.append(f"\n🐙 **GitHub watchers:** {len(gh_snap)}"
+                 + (f" · ⚠️ {len(gh_pending)} pending approval" if gh_pending else ""))
+    if gh_snap:
+        gh_rows = [f"• `{d.get('repo') or d.get('fname','?')}` → `{d.get('uid')}`"
+                   for d in list(gh_snap.values())[:15]]
+        lines.append("\n".join(gh_rows))
+        if len(gh_snap) > 15:
+            lines.append(f"  … and {len(gh_snap) - 15} more")
 
     msg = "\n".join(lines)
     if len(msg) > 4000:
@@ -4353,6 +4386,146 @@ def _web_deploy_async(chat_id, mid, key_or_name, done_msg_fn):
 
 # ================= END WEB HOSTING CORE =================
 
+# ================= GITHUB REPO HOSTING (separate ZEX approval) =================
+GH_URL_RE = re.compile(r'(?:https?://)?(?:www\.)?github\.com[:/]([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)', re.I)
+GH_MAX_REPO = 100 * 1024 * 1024  # 100MB unpacked cap
+
+def _extract_gh_url(text):
+    if not text: return None
+    m = GH_URL_RE.search(text)
+    if not m: return None
+    owner, repo = m.group(1), m.group(2)
+    repo = repo.rstrip('/')
+    if repo.lower().endswith('.git'):
+        repo = repo[:-4]
+    if '.' in repo:  # trailing like /tree/master, /issues/.. -> keep clean base repo name
+        repo = repo.split('.')[0]
+    return f"https://github.com/{owner}/{repo}", owner, repo
+
+def _load_gh_manifest():
+    try:
+        with open(GH_MANIFEST_PATH, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _save_gh_manifest():
+    try:
+        with open(GH_MANIFEST_PATH, 'w', encoding='utf-8') as f:
+            json.dump(gh_manifest, f)
+    except Exception as e:
+        logger.error(f"gh manifest save err: {e}")
+
+def _gh_clone(url, dest, timeout=180):
+    if not shutil.which('git'):
+        raise RuntimeError('git not installed on this host')
+    r = subprocess.run(['git', 'clone', '--depth', '1', '--quiet', url, dest],
+                       capture_output=True, text=True, timeout=timeout)
+    if r.returncode != 0:
+        raise RuntimeError((r.stderr or r.stdout or 'clone failed').strip()[:200])
+
+def _gh_walk(root):
+    out = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d != '.git']
+        for fn in filenames:
+            out.append(os.path.join(dirpath, fn))
+    return out
+
+@bot.message_handler(func=lambda m: m.text and 'github.com/' in m.text.lower()
+                     and deploy_sessions.get(m.from_user.id))
+def _logic_gh_link(message):
+    uid = message.from_user.id
+    _touch_user(uid)
+    deploy_sessions.pop(uid, None)
+    if is_user_banned(uid):
+        bot.reply_to(message, "⛔ "+_t("your account is restricted from this bot")); return
+    if bot_locked and uid not in admin_ids:
+        bot.reply_to(message, "🔧 "+_t("under maintenance")+" — "+_t("uploads paused.")); return
+    found = _extract_gh_url(message.text)
+    if not found:
+        deploy_sessions[uid] = True
+        bot.reply_to(message, "🧐 "+_t("github link not recognized")+" — "+_t("send")+f" `https://github.com/user/repo`", parse_mode='Markdown'); return
+    if uid not in admin_ids and not _rate_ok(uid):
+        bot.reply_to(message, "📉 "+_t("too many uploads - slow down")); return
+    url, owner, repo = found
+    file_limit = get_user_file_limit(uid)
+    file_count = get_user_file_count(uid)
+    if file_count >= file_limit:
+        limit_str = str(file_limit) if file_limit != float('inf') else "Unlimited"
+        bot.reply_to(message, f"\U0001F9BA "+_t("slots full")+f" [{file_count}/{limit_str}] — "+_t("remove one or buy subscription")+" → "+_t("contact")+" "+YOUR_USERNAME); return
+    bot.reply_to(message, f"🐙 "+_t("cloning your repository")+f" `{owner}/{repo}` ...", parse_mode='Markdown')
+    tmpdir = tempfile.mkdtemp(prefix='ghclone_')
+    try:
+        target = os.path.join(tmpdir, 'repo')
+        _gh_clone(url, target)
+        shutil.rmtree(os.path.join(target, '.git'), ignore_errors=True)
+        files = _gh_walk(target)
+        if not files:
+            bot.reply_to(message, "🕳️ "+_t("empty repository")); return
+        total = sum(os.path.getsize(p) for p in files)
+        if total > GH_MAX_REPO:
+            bot.reply_to(message, "🐳 "+_t("repository too big")); return
+        if len(files) == 1:
+            fp = files[0]
+            ext = os.path.splitext(fp)[1].lstrip('.').lower()
+            if ext not in ('py', 'js'):
+                bot.reply_to(message, "🚫 "+_t("single file must be .py or .js")); return
+            content = open(fp, 'rb').read()
+            fname = f"{owner}-{repo}{os.path.splitext(fp)[1]}"
+            ftype = ext
+            ai_path = fp
+        else:
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+                for p in files:
+                    z.write(p, os.path.relpath(p, target))
+            content = buf.getvalue()
+            with zipfile.ZipFile(io.BytesIO(content)) as zc:
+                zb = _zip_bomb_check(zc)
+                if zb: raise RuntimeError(zb)
+            zpath = os.path.join(tmpdir, f"{owner}-{repo}.zip")
+            with open(zpath, 'wb') as f: f.write(content)
+            fname = f"{owner}-{repo}.zip"
+            ftype = 'zip'
+            ai_path = zpath
+        ai_report = build_ai_report(ai_path, ftype, uid,
+                                    message.from_user.first_name, file_label=fname)
+        _gh_counter[0] += 1
+        key = f"{uid}_{_gh_counter[0]}"
+        gh_pending[key] = {'uid': uid, 'url': url, 'repo': f"{owner}/{repo}",
+                           'content': content, 'fname': fname, 'ftype': ftype}
+        markup = types.InlineKeyboardMarkup()
+        markup.row(
+            types.InlineKeyboardButton("\u2705 "+_t("approve"), callback_data=f"gapprove_{key}"),
+            types.InlineKeyboardButton("\u2716\uFE0F "+_t("reject"), callback_data=f"greject_{key}"))
+        alert = "\U0001F419 GI\u1D1BHU\u0180 APPROVAL\n\n" + ai_report + f"\n\n\U0001F4E6 "+_t("file")+f": {fname}\n\U0001F517 {url}"
+        alert += "\n\n" + _t("approval required")
+        for aid in admin_ids:
+            head = ("\U0001F419 GI\u1D1BHU\u0180 APPROVAL\n\n"
+                    "\U0001F4E6 "+_t("file")+": "+fname+"\n"
+                    "\U0001F464 "+_t("user id")+": "+str(uid)+"\n"+"\U0001F517 "+url)
+            try:
+                bot.send_message(aid, alert[:2048], reply_markup=markup)
+            except Exception as e: logger.error(f"gh report -> admin {aid}: {e}")
+            try:
+                bot.send_document(aid, content, caption=head[:900], visible_file_name=fname)
+            except Exception as e: logger.error(f"gh doc -> admin {aid}: {e}")
+        bot.reply_to(message, "🐙 "+_t("security review in progress")+"...\n🔔 "+_t("you'll be notified upon approval")+".")
+    except subprocess.TimeoutExpired:
+        logger.error(f"gh clone timeout for {url}")
+        bot.reply_to(message, "⏱ "+_t("clone timed out")+" — "+_t("try a smaller repo"))
+    except Exception as e:
+        logger.error(f"gh deploy error from {uid}: {e}", exc_info=True)
+        bot.reply_to(message, f"💥 "+_t("github error")+f": {str(e)[:140]}")
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+# load persisted deployed-repo manifest (in-memory dict kept, file/TiDB used for restore)
+gh_manifest.update(_load_gh_manifest())
+
+# ================ END GITHUB REPO HOSTING =================
+
 # --- Command Handlers & Text Handlers for ReplyKeyboard ---
 @bot.message_handler(commands=['start', 'help'])
 def command_send_welcome(message): 
@@ -4646,6 +4819,8 @@ def handle_callbacks(call):
         elif data.startswith('reject_file_'): admin_required_callback(call, process_reject_file)
         elif data.startswith('approve_zip_'): admin_required_callback(call, process_approve_zip)
         elif data.startswith('reject_zip_'): admin_required_callback(call, process_reject_zip)
+        elif data.startswith('gapprove_'): admin_required_callback(call, process_approve_gh)
+        elif data.startswith('greject_'): admin_required_callback(call, process_reject_gh)
         elif data == 'web_host':
             bot.answer_callback_query(call.id, "🌐 web host")
             try: bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -6361,6 +6536,69 @@ def process_reject_zip(call):
         bot.send_message(user_id, f"❌ Your archive `{file_name}` has been rejected for security reasons.")
     except Exception as e:
         logger.error(f"Failed to notify user {user_id}: {e}")
+
+def process_approve_gh(call):
+    """Process admin approval for a GitHub repo (separate queue from bot/web)."""
+    parts = call.data.split('_', 1)
+    if len(parts) < 2:
+        bot.answer_callback_query(call.id, "❌ Invalid data.", show_alert=True); return
+    key = parts[1]
+    ent = gh_pending.pop(key, None)
+    if not ent:
+        bot.answer_callback_query(call.id, "\u26A0\uFE0F "+_t("expired"), show_alert=True); return
+    uid = ent['uid']; fname = ent['fname']; ftype = ent['ftype']
+    user_folder = get_user_folder(uid)
+    temp_dir = None
+    try:
+        if ftype == 'zip':
+            temp_dir = tempfile.mkdtemp(prefix=f"user_{uid}_gh_approve_")
+            zip_path = os.path.join(temp_dir, fname)
+            with open(zip_path, 'wb') as f:
+                f.write(ent['content'])
+            process_zip_file(zip_path, uid, user_folder, fname, call.message, temp_dir)
+        else:
+            file_path = os.path.join(user_folder, fname)
+            with open(file_path, 'wb') as f:
+                f.write(ent['content'])
+            if ftype == 'js':
+                handle_js_file(file_path, uid, user_folder, fname, call.message)
+            else:
+                handle_py_file(file_path, uid, user_folder, fname, call.message)
+        gh_key = f"{uid}_{fname}"
+        gh_manifest[gh_key] = {'uid': uid, 'url': ent.get('url', ''),
+                               'fname': fname, 'ftype': ftype,
+                               'added': datetime.now().strftime('%Y-%m-%d')}
+        _save_gh_manifest()
+        bot.answer_callback_query(call.id, "✅ GitHub approved!")
+        bot.edit_message_text(f"✅ GitHub `{fname}` approved for user `{uid}`",
+                              call.message.chat.id, call.message.message_id)
+        try:
+            bot.send_message(uid, f"✅ Your GitHub repo `{fname}` has been approved and started.")
+        except Exception as e:
+            logger.error(f"Failed to notify user {uid}: {e}")
+    except Exception as e:
+        logger.error(f"Error approving GitHub repo for {uid}: {e}", exc_info=True)
+        bot.answer_callback_query(call.id, "❌ Error processing GitHub repo.", show_alert=True)
+    finally:
+        if temp_dir and os.path.exists(temp_dir):
+            try: shutil.rmtree(temp_dir)
+            except Exception as e: logger.error(f"gh approve temp clean err: {e}")
+
+def process_reject_gh(call):
+    """Process admin rejection for a GitHub repo."""
+    parts = call.data.split('_', 1)
+    if len(parts) < 2:
+        bot.answer_callback_query(call.id, "❌ Invalid data.", show_alert=True); return
+    key = parts[1]
+    ent = gh_pending.pop(key, None)
+    bot.answer_callback_query(call.id, "❌ GitHub rejected")
+    bot.edit_message_text(f"❌ GitHub repo `{ent['fname'] if ent else '?'}` rejected",
+                          call.message.chat.id, call.message.message_id)
+    if ent:
+        try:
+            bot.send_message(ent['uid'], "❌ Your GitHub repo was rejected by admin")
+        except Exception as e:
+            logger.error(f"gh reject notify err: {e}")
 
 # --- Cleanup Function ---
 def cleanup():
