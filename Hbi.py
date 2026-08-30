@@ -349,72 +349,66 @@ load_data()
 # --- AI Security Analyzer (Local High-Level Engine) ---
 class AISecurityAnalyzer:
     THREATS = [
-        ("backdoor", 35, "🐛 ᴄᴀɴ ɢɪᴠᴇ ʀᴇᴍᴏᴛᴇ ᴀᴄᴄᴇꜱꜱ ᴛᴏ ʏᴏᴜʀ ꜱᴇʀᴠᴇʀ (ʙᴀᴄᴋᴅᴏᴏʀ)",
-            [r'SOCK_STREAM', r'\.bind\s*\(', r'\.listen\s*\(', r'pty\.spawn', r'/bin/(ba)?sh\s*-i',
-             r'cmd\.exe', r'net\.Socket', r'reverse[-_ ]?shell', r'connect\(\(.*\d{4}\)']),
-        ("token_theft", 30, "🔑 ᴄᴀɴ ꜱᴛᴇᴀʟ ᴘᴀꜱꜱᴡᴏʀᴅꜱ, ᴛᴏᴋᴇɴꜱ ᴏʀ ᴄᴏᴏᴋɪᴇꜱ",
-            [r'\.env\b', r'bot[_ ]?token', r'bearer\s+[a-z0-9]', r'/etc/(passwd|shadow)',
-             r'keyring', r'cookies?(\.sqlite|\.txt|jar)?', r'credential', r'login_?data',
-             r'local\s?state', r'keychain|keytar', r'getpass', r'password\s*=\s*[\'"]?[a-z0-9]{6}']),
-        ("spy", 26, "🕵 ᴄᴀɴ ꜱᴘʏ ᴏɴ ʏᴏᴜ (ꜱᴄʀᴇᴇɴ, ᴋᴇʏꜱ, ᴄᴀᴍ ᴏʀ ᴍɪᴄ)",
-            [r'pynput', r'keyboard\.(listener|hook|on_press)', r'mss|pyscreenshot', r'pyautogui\.screenshot',
-             r'cv2\.videocapture', r'sounddevice|pyaudio', r'webcam', r'keylogger']),
-        ("data_out", 24, "📡 ᴄᴀɴ ꜱᴇɴᴅ ʏᴏᴜʀ ᴘʀɪᴠᴀᴛᴇ ᴅᴀᴛᴀ ᴛᴏ ᴀɴᴏᴛʜᴇʀ ꜱᴇʀᴠᴇʀ",
-            [r'requests\.(post|put)\s*\(', r'urlopen\s*\(', r'api/webhooks', r'discord(app)?\.com/api/webhooks',
-             r'axios\.(post|put)', r'xmlhttprequest', r'aiohttp.{0,40}\.(post|put)', r'net\.request']),
-        ("abuse", 22, "🔇 ᴄᴀɴ ꜱʟᴏᴡ ᴅᴏᴡɴ/ʜᴀʀᴍ ʏᴏᴜʀ ᴅᴇᴠɪᴄᴇ (ᴍɪɴɪɴɢ ᴏʀ ꜰʟᴏᴏᴅ)",
-            [r'stratum', r'xmrig|minerd|coinhive|xmr-stak', r'\bddos\b', r'\bflood', r'hashlib\.pbkdf2']),
-        ("file_damage", 28, "🗑 ᴄᴀɴ ᴅᴇʟᴇᴛᴇ ᴏʀ ʀᴜɪɴ ʏᴏᴜʀ ꜰɪʟᴇꜱ",
-            [r'shutil\.rmtree', r'os\.(remove|unlink)\s*\(', r'rm\s+-rf', r'fs\.(rmsync|rmdirsync|unlinksync)',
-             r'del\s+/[fq]', r'rd\s+/s', r'format\s+c:']),
-        ("persist", 18, "🔁 ᴄᴀɴ ʀᴇ-ꜱᴛᴀʀᴛ ɪᴛꜱᴇʟꜰ ᴀᴜᴛᴏᴍᴀᴛɪᴄᴀʟʟʏ (ᴘᴇʀꜱɪꜱᴛᴇɴᴄᴇ)",
-            [r'crontab', r'systemd|\.service\b', r'autostart', r'startup[ _]?folder', r'launchd',
-             r'currentversion\\\\run', r'schtasks']),
-        ("obfusc", 16, "👾 ᴄᴏᴅᴇ ɪꜱ ʜɪᴅᴅᴇɴ/ᴇɴᴄʀʏᴘᴛᴇᴅ — ᴀ ᴛʀɪᴄᴋ ᴜꜱᴇᴅ ɪɴ ʜᴀʀᴍꜰᴜʟ ꜱᴄʀɪᴘᴛꜱ",
-            [r'b64decode|base64\.b64decode', r'atob\s*\(', r"buffer\.from\([^)]{0,40},\s*['\"]base64",
-             r'zlib\.decompress', r'marshal\.loads', r'fromcharcode', r'(\\x[0-9a-f]{2}){12,}',
-             r'rot13', r'exec\s*\(\s*compile']),
-        ("forkbomb", 40, "💣 ᴄᴀɴ ꜰʀᴇᴇᴢᴇ/ᴄʀᴀꜱʜ ʏᴏᴜʀ ꜱᴇʀᴠᴇʀ (ꜰᴏʀᴋ ʙᴏᴍʙ)",
-            [r'os\.fork\s*\(\s*\)', r'while\s+true.{0,60}os\.system', r'spawn.{0,30}while\s*\(?\s*(true|1)',
-             r'child_process.{0,80}spawn.{0,80}while', r':(){ :|:& };:']),
-        ("deser_exec", 34, "🧩 ᴄᴀɴ ʀᴜɴ ʜɪᴅᴅᴇɴ ᴄᴏᴅᴇ ᴠɪᴀ ᴅᴀᴛᴀ ꜰɪʟᴇꜱ (ᴘɪᴄᴋʟᴇ/ʏᴀᴍʟ ᴛʀɪᴄᴋ)",
-            [r'pickle\.loads?\s*\(', r'cPickle', r'yaml\.load\s*\((?![^)]*Loader)', r'dill\.loads',
-             r'eval\s*\(\s*input', r'new Function\s*\(']),
-        ("root_escal", 38, "👑 ᴛʀɪᴇꜱ ᴛᴏ ɢᴇᴛ ᴀᴅᴍɪɴ/ʀᴏᴏᴛ ᴘᴏᴡᴇʀꜱ",
-            [r'ctypes[^\n]{0,60}setuid', r'\bsudo\b', r'setuid\s*\(\s*0', r'uid=0', r'geteuid',
-             r'/etc/sudoers', r'runas\b', r'start-process\s+-verb\s+runas']),
-        ("browser_steal", 36, "🌐 ᴄᴀɴ ꜱᴛᴇᴀʟ ʙʀᴏᴡꜱᴇʀ ᴘᴀꜱꜱᴡᴏʀᴅꜱ/ᴄᴏᴏᴋɪᴇꜱ",
-            [r'appdata[^\n]{0,50}google\\chrome', r'login[ _]?data', r'web data', r'cookies\.sqlite',
-             r'local\sstate', r'%appdata%', r'ls/copy[^\n]{0,40}cookies', r'edge[/\\]user data']),
-        ("discord_theft", 34, "🎮 ᴄᴀɴ ꜱᴛᴇᴀʟ ᴅɪꜱᴄᴏʀᴅ/ɢᴀᴍɪɴɢ ᴛᴏᴋᴇɴꜱ",
-            [r'[MNOmno][A-Za-z0-9_-]{23}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27}', r'discord[^\n]{0,30}(token|ldb)',
-             r'leveldb[^\n]{0,20}\.ldb', r'token[_ ]?grab']),
-        ("exfil_endpoints", 26, "📤 ꜱᴇɴᴅꜱ ᴅᴀᴛᴀ ᴛᴏ ᴘᴀꜱᴛᴇʙɪɴ-ʟɪᴋᴇ ᴇxꜰɪʟ ᴘᴏɪɴᴛꜱ",
-            [r'pastebin\.com/raw', r'hastebin', r'requestbin', r'webhook\.site', r'ngrok\.io|ngrok-free\.app',
-             r'pipedream\.net', r'interact\.sh', r'discord(app)?\.com/api/webhooks']),
-        ("env_scrape", 24, "🗝 ꜱᴄᴀɴꜱ ᴇɴᴠɪʀᴏɴᴍᴇɴᴛ ꜰᴏʀ ꜱᴇᴄʀᴇᴛꜱ",
+        # real remote-access backdoors - these SHOULD be flagged high
+        ("backdoor", 62, "🐛 ʀᴇᴍᴏᴛᴇ ᴀᴄᴄᴇꜱꜱ / ʀᴇᴠᴇʀꜱᴇ ꜱʜᴇʟʟ ᴅᴇᴛᴇᴄᴛᴇᴅ",
+            [r'/bin/(ba)?sh\s*-i', r'pty\.spawn', r'reverse[-_ ]?shell', r'/dev/tcp/',
+             r'nc\s+-e\s+/bin/sh', r'netcat\s+-e', r'bash\s+-i\s*[>]', r'<?php[\s\S]{0,300}(\$(\w+)\s*=\s*)?(system|shell_exec|passthru)\s*\([^)]{0,80}\$_',
+             r'msfvenom', r'\./.+\.sh\s+&', r'jndi:ldap', r'python3?\s+-c\s+[\'"][^\'\"]*socket[\'\"]']),
+        ("bind_shell", 55, "🔌 ʙɪɴᴅ ꜱʜᴇʟʟ — ʟɪꜱᴛᴇɴꜱ ꜰᴏʀ ɪɴᴄᴏᴍɪɴɢ ᴀᴛᴛᴀᴄᴋᴇʀ ᴄᴏɴɴᴇᴄᴛɪᴏɴ",
+            [r'bindshell|bind[ _-]?shell', r'pty\.spawn.*(bound|socket)', r'os\.(system|popen)\s*\([^)]*(/bin/sh|cmd\.exe)',
+             r'listen\s*\(\s*\d+\s*,.*(os\.system|subprocess|/bin/sh)', r'nc\s+-l(-p)?\s+\d+']),
+        ("cmd_shell", 45, "🖥 ꜱʜᴇʟʟ/ᴇxᴇᴄ ᴏꜰ ʀᴇᴍᴏᴛᴇ ᴘᴀʏʟᴏᴀᴅ",
+            [r'child_process\.exec|execSync|spawnSync', r'os\.system\s*\(\s*[\'\"`].*?\$\{',
+             r'subprocess\.(call|run|popen)\s*\([^)]*shell\s*=\s*True', r'bash\s+-c', r'sh\s+-c',
+             r'eval\s*\(\s*(base64|b64decode|codecs)', r'exec\s*\(\s*(base64|b64decode|codecs)']),
+        # stealing other users'/host tokens - high risk on this host
+        ("token_theft", 48, "🔑 ᴄᴀɴ ꜱᴛᴇᴀʟ ᴛᴏᴋᴇɴꜱ/ᴄʀᴇᴅᴇɴᴛɪᴀʟꜱ",
+            [r'/etc/(passwd|shadow)', r'Appdata[^\n]{0,50}chrome', r'login[ _]?data', r'cookies\.sqlite',
+             r'local[ _]?state', r'keyring|keytar|keychain', r'browser[^\n]{0,30}(password|cookie)',
+             r'%appdata%[^\n]{0,40}(leveldb|local)', r'sqlite3\.connect\s*\(\s*[\'\"].*(login|cookie|cache)']),
+        ("scrape_files", 55, "🗂 ᴄᴀɴ ꜱᴛᴇᴀʟ ᴏᴛʜᴇʀ ᴜꜱᴇʀꜱ' ꜰɪʟᴇꜱ & ᴛᴏᴋᴇɴꜱ ꜰʀᴏᴍ ᴛʜɪꜱ ʜᴏꜱᴛ",
+            [r"os\.(listdir|walk|scandir)\s*\(\s*['\"](\.\.|/)", r"open\s*\(\s*['\"](\.\./|/etc/|/data/|/opt/)",
+             r"/sdcard|/storage/(emulated|self)", r"glob\.glob\s*\(\s*['\"][^'\"]*\.\.", r"\bhbi\.py\b"]),
+        ("env_scrape", 34, "🗝 ꜱᴄᴀɴꜱ ᴇɴᴠɪʀᴏɴᴍᴇɴᴛ ꜰᴏʀ ꜱᴇᴄʀᴇᴛꜱ",
             [r'environ(ment)?\[[\'"][^\'"]*(key|secret|token|pass)', r'process\.env\.[A-Z_]*(TOKEN|KEY|SECRET)',
              r'os\.environ.{0,30}(items|values)\s*\(']),
-        ("scrape_files", 38, "🗂 ᴄᴀɴ ꜱᴛᴇᴀʟ ᴏᴛʜᴇʀ ᴜꜱᴇʀꜱ' ꜰɪʟᴇꜱ & ᴛᴏᴋᴇɴꜱ ꜰʀᴏᴍ ᴛʜɪꜱ ʜᴏꜱᴛ",
-            [r"os\.(listdir|walk|scandir)\s*\(\s*['\"](\.\.|/)", r"open\s*\(\s*['\"](\.\./|/etc/|/data/)",
-             r"/sdcard|/storage/(emulated|self)", r"\bhbi\.py\b", r"shutil\.make_archive",
-             r"shutil\.copytree", r"glob\.glob\s*\(\s*['\"][^'\"]*\.\.", r"sqlite3\.connect\s*\(\s*['\"]\.\."]),
-        ("tunnel_expose", 44, "🌍 ᴏᴘᴇɴꜱ ᴘᴜʙʟɪᴄ ᴛᴜɴɴᴇʟ — ᴡʜᴏʟᴇ ɪɴᴛᴇʀɴᴇᴛ ʀᴇᴀᴄʜᴇꜱ ᴅᴇᴠɪᴄᴇ",
-            [r"pyngrok|ngrok\.connect|ngrok\.com", r"localtunnel", r"serveo", r"localhost\.run",
-             r"cloudflared|trycloudflare", r"telebit|bore\.pub|zrok\.io"])
+        # spy/keylogger - real surveillance
+        ("spy", 38, "🕵 ᴄᴀɴ ꜱᴘʏ ᴏɴ ʏᴏᴜ (ꜱᴄʀᴇᴇɴ, ᴋᴇʏꜱ, ᴄᴀᴍ ᴏʀ ᴍɪᴄ)",
+            [r'pynput\.keyboard', r'keyboard\.(listener|hook|on_press|capture)', r'keylogger', r'pyscreenshot',
+             r'cv2\.videocapture\(\s*0', r'pyautogui\.screenshot', r'smart\_camera|webcam\(\)']),
+        # exfil to external dump sites / webhooks
+        ("exfil_endpoints", 34, "📤 ꜱᴇɴᴅꜱ ᴅᴀᴛᴀ ᴛᴏ ᴇxᴛᴇʀɴᴀʟ ᴅᴜᴍᴘ ꜱɪᴛᴇ",
+            [r'pastebin\.com/raw', r'hastebin', r'requestbin', r'webhook\.site', r'pipedream\.net',
+             r'interact\.sh', r'discord(app)?\.com/api/webhooks', r'api/webhooks']),
+        # mining
+        ("abuse", 40, "🔇 ꜱʟᴏᴡꜱ/ʜᴀʀᴍꜱ ꜱᴇʀᴠᴇʀ (ᴍɪɴɪɴɢ ᴏʀ ꜰʟᴏᴏᴅ)",
+            [r'stratum', r'xmrig|minerd|coinhive|xmr-stak', r'\bddos\b', r'\bflood', r'mine\b', r'slowloris']),
+        # destructive ops targeting system
+        ("file_damage", 40, "🗑 ᴄᴀɴ ᴅᴇʟᴇᴛᴇ/ʀᴜɪɴ ꜱʏꜱᴛᴇᴍ ꜰɪʟᴇꜱ",
+            [r'rm\s+-rf\s+/', r'format\s+c:', r'del\s+.*\\prescue', r'shutil\.rmtree\s*\(\s*[\'\"](/|\.\.)',
+             r'os\.(remove|unlink)\s*\(\s*[\'\"](/etc|/boot|/var)']),
+        ("forkbomb", 45, "💣 ꜰʀᴇᴇᴢᴇ/ᴄʀᴀꜱʜ ꜱᴇʀᴠᴇʀ (ꜰᴏʀᴋ ʙᴏᴍʙ)",
+            [r':\(\s*{\s*:\s*\|:&\s*};', r'while\s+True\s*:\s*os\.fork', r'os\.fork\s*\(\s*\)\s*.{0,30}os\.fork']),
+        ("persist", 24, "🔁 ᴀᴜᴛᴏ-ʀᴇꜱᴛᴀʀᴛ ᴘᴇʀꜱɪꜱᴛᴇɴᴄᴇ",
+            [r'crontab\s+-[er]', r'@reboot', r'rc\.local', r'autostart', r'schtasks', r'currentversion\\\\run']),
+        ("deser_exec", 30, "🧩 ʜɪᴅᴅᴇɴ ᴄᴏᴅᴇ ᴠɪᴀ ᴅᴀᴛᴀ ꜰɪʟᴇꜱ",
+            [r'pickle\.loads?\s*\(', r'cPickle', r'yaml\.load\s*\((?![^)]*Loader)', r'dill\.loads']),
+        ("tunnel_expose", 28, "🌍 ᴏᴘᴇɴꜱ ᴘᴜʙʟɪᴄ ᴛᴜɴɴᴇʟ",
+            [r'pyngrok|ngrok\.connect|ngrok\.com', r'localtunnel', r'serveo', r'localhost\.run',
+             r'cloudflared|trycloudflare', r'bore\.pub|zrok\.io']),
     ]
-    CMD_EXEC = ("cmd_exec", 22, "🖥 ᴄᴀɴ ʀᴜɴ ʜɪᴅᴅᴇɴ ꜱʏꜱᴛᴇᴍ ᴄᴏᴍᴍᴀɴᴅꜱ ᴏɴ ʏᴏᴜʀ ꜱᴇʀᴠᴇʀ")
-    CMD_PATTERNS = [r'os\.system\s*\(', r'os\.popen\s*\(', r'subprocess\.(call|run|popen|check_output)',
-                    r'child_process', r'os\.(execl|execv|spawnl|spawnv)', r'\bexec\s*\(', r'\beval\s*\(',
-                    r'shell\s*=\s*true', r'commands?\.execute']
+    CMD_EXEC = ("cmd_exec", 10, "🖥 ꜱʜᴇʟʟ ᴄᴏᴍᴍᴀɴᴅ ᴘᴀᴛᴛᴇʀɴ (ʟᴏᴡ ʀɪꜱᴋ ᴀʟᴏɴᴇ)")
+    CMD_PATTERNS = [r'subprocess\.(call|run|popen|check_output)\([^)]*shell\s*=\s*True',
+                    r'os\.system\s*\(\s*[\'\"](rm\s+-rf|curl|wget|nc|echo)', r'child_process\.(exec|execSync|spawn)',
+                    r'powershell\s+(-enc|\-e)\b', r'curl\s+.*\|?\s*sudo\s+bash']
     SAFE_IMPORTS = {'flask','telebot','requests','math','random','datetime','time','json','os','sys','re',
                     'logging','sqlite3','threading','psutil','aiohttp','asyncio','collections','itertools',
                     'functools','typing','pathlib','io','os.path','uuid','hashlib','base64','urllib','socket',
                     'express','fs','http','https','path','dotenv'}
     VERDICTS = [(90,"⛔","ᴅᴀɴɢᴇʀᴏᴜꜱ — ʀᴜɴɴɪɴɢ ɴᴏᴛ ʀᴇᴄᴏᴍᴍᴇɴᴅᴇᴅ"),
                 (70,"🔴","ʜɪɢʜ ʀɪꜱᴋ — ᴄʜᴇᴄᴋ ꜰɪɴᴅɪɴɢꜱ ᴄᴀʀᴇꜰᴜʟʟʏ"),
-                (45,"🟠","ᴍᴇᴅɪᴜᴍ ʀɪꜱᴋ — ʀᴇᴠɪᴇᴡ ʙᴇꜰᴏʀᴇ ʀᴜɴ"),
-                (20,"🟡","ꜱʟɪɢʜᴛ ʀɪꜱᴋ — ᴘʀᴏʙᴀʙʟʏ ᴏᴋᴀʏ"),
+                (45,"🟠","ʀɪꜱᴋʏ — ʀᴇᴍᴏᴛᴇ ᴀᴄᴄᴇꜱꜱ/ꜱᴇᴄʀᴇᴛ-ᴛʜᴇꜰᴛ ᴄᴏᴅᴇ"),
+                (20,"🟡","ᴍᴏꜱᴛʟʏ ꜱᴀꜰᴇ — ᴘʀᴏʙᴀʙʟʏ ᴏᴋᴀʏ"),
                 (0,"🟢","ꜱᴀꜰᴇ — ʟᴏᴏᴋꜱ ᴄʟᴇᴀɴ")]
 
     def analyze_text(self, text):
@@ -422,18 +416,8 @@ class AISecurityAnalyzer:
         findings, score, hits = [], 0, []
         cats = list(self.THREATS)
         cats.insert(0, self.CMD_EXEC + (self.CMD_PATTERNS,))
-        obf_hits = 0
         for entry in cats:
-            if len(entry) == 4:
-                name, w, desc, pats = entry
-                if name == "obfusc":
-                    obf_hits = sum(1 for pat in pats if re.search(pat, low))
-                    if obf_hits:
-                        add = min(w + (obf_hits - 1) * 8, 32)
-                        score += add; findings.append(desc)
-                    continue
-            else:
-                name, w, desc, pats = entry
+            name, w, desc, pats = entry
             for pat in pats:
                 if re.search(pat, low):
                     score += w; findings.append(desc)
@@ -445,7 +429,7 @@ class AISecurityAnalyzer:
             for m in mods:
                 m = m.strip().split('.')[0].strip()
                 if m and m not in self.SAFE_IMPORTS and m not in ('as',): imports_clean = False
-        if imports_clean and 0 < score <= 30: score -= 8
+        if imports_clean and 0 < score <= 40: score -= 10
         score = max(3, min(score, 100))
         verdict = next(v for start, e, v in self.VERDICTS if score >= start)
         emoji = verdict and next((e for st, e, vv in self.VERDICTS if score >= st), "\U0001F7E2")
@@ -498,27 +482,23 @@ class AISecurityAnalyzer:
 
         # ---- decision-friendly verdict ----
         HARM = {
-            'cmd_exec':    "can run hidden system commands on host",
-            'backdoor':    "attacker gets remote access to device",
+            'backdoor':    "attacker gets full remote access to device",
+            'bind_shell':  "attacker can connect to an open shell",
+            'cmd_shell':   "runs hidden shell commands / remote payloads",
             'token_theft': "saved passwords/tokens can be stolen",
-            'spy':         "screen, keys or camera can be spied",
-            'data_out':    "private data sent to attacker's server",
-            'abuse':       "server lag & battery drain (mining/flood)",
-            'file_damage': "your files and folders can be deleted",
-            'persist':     "malware auto-restarts after every reboot",
-            'obfusc':      "hidden code evades normal detection",
-            'forkbomb':    "whole server can freeze/crash",
-            'deser_exec':  "hidden code runs via data files",
-            'root_escal':  "attacker gains root/admin powers",
-            'browser_steal':"browser passwords & cookies stolen",
-            'discord_theft':"discord/game tokens can be stolen",
-            'exfil_endpoints':"stolen data uploaded to dump sites",
-            'env_scrape':  "environment secrets harvested",
             'scrape_files':"other users' bot files & tokens stolen from this host",
+            'env_scrape':  "environment secrets harvested",
+            'spy':         "screen, keys or camera can be spied",
+            'exfil_endpoints':"private data sent to attacker's dump site",
+            'abuse':       "server lag & battery drain (mining/flood)",
+            'file_damage': "system files can be deleted",
+            'forkbomb':    "whole server can freeze/crash",
+            'persist':     "malware auto-restarts after every reboot",
+            'deser_exec':  "hidden code runs via data files",
             'tunnel_expose':"device becomes reachable by whole internet",
         }
-        if best_score >= 90:   v_emoji, v_status, v_rec = "⛔", "MALWARE", "NO - never approve"
-        elif best_score >= 70: v_emoji, v_status, v_rec = "🔴", "DANGEROUS", "NO"
+        if best_score >= 90:   v_emoji, v_status, v_rec = "⛔", "DANGEROUS", "NO - never approve"
+        elif best_score >= 70: v_emoji, v_status, v_rec = "🔴", "HIGH RISK", "NO"
         elif best_score >= 45: v_emoji, v_status, v_rec = "🟠", "RISKY", "check first"
         elif best_score >= 20: v_emoji, v_status, v_rec = "🟡", "MOSTLY SAFE", "yes - with care"
         else:                  v_emoji, v_status, v_rec = "🟢", "SAFE", "yes"
@@ -550,16 +530,23 @@ class AISecurityAnalyzer:
 class GrokSecurityScanner:
     """xAI Grok deep-scan with 3-key failover. Returns dict or None."""
     SYSTEM_PROMPT = (
-        "You are a hostile code security auditor for a public bot/web hosting platform. "
-        "Analyze the given code for: backdoors/reverse shells, token-password-cookie theft, "
-        "keyloggers/spyware, crypto miners, data exfiltration, destructive file operations, "
-        "persistence tricks, and obfuscation hiding malicious intent. "
-        "Be deeply suspicious of code that looks innocent but does something hidden. "
-        "Scoring: 0-19 safe, 20-44 slight risk, 45-69 medium, 70-89 high, 90-100 dangerous. "
+        "You are a code security auditor for a public bot hosting platform. "
+        "Flag ONLY these real threats: reverse shells, remote-access backdoors, "
+        "stealing tokens/passwords/cookies from the host or other users, "
+        "keyloggers, crypto miners, destructive system-wide deletions, "
+        "fork bombs. Normal Telegram bot code that uses requests, subprocess, "
+        "socket or reads its OWN .env is NOT a threat. "
+        "Score: 0-19 safe, 20-44 mostly safe, 45-69 risky, 70-100 dangerous. "
         'Respond ONLY with minified JSON, no markdown: {"score": int, "findings": ["short human-readable risk", ...], "summary": "one short line"}'
     )
 
+    _last_failure_ts = 0
+
     def scan(self, texts):
+        import time as _t
+        now = _t.time()
+        if now - self._last_failure_ts < 300:
+            return None  # keys failed recently - skip to avoid hanging uploads
         keys = [k.strip() for k in GROK_KEYS if k and k.strip()]
         if not keys: return None
         blob = "\n\n===== FILE =====\n".join(t[:9000] for t in texts if t)[:45000]
@@ -567,12 +554,12 @@ class GrokSecurityScanner:
         body = {"model": GROK_MODEL,
                 "messages": [{"role":"system","content":self.SYSTEM_PROMPT},
                              {"role":"user","content":"AUDIT THIS CODE:\n\n"+blob}],
-                "temperature": 0.1, "max_tokens": 600}
+                "temperature": 0.1, "max_tokens": 500}
         for i, key in enumerate(keys):
             try:
                 r = requests.post(GROK_API, json=body,
                                   headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                                  timeout=22)
+                                  timeout=8)
                 if r.status_code != 200:
                     logger.warning(f"Grok key #{i+1} http {r.status_code}"); continue
                 content = r.json()['choices'][0]['message']['content'].strip()
@@ -584,6 +571,7 @@ class GrokSecurityScanner:
                 return {"score": score, "findings": findings, "summary": str(d.get('summary',''))[:150]}
             except Exception as e:
                 logger.warning(f"Grok key #{i+1} failed: {e}"); continue
+        self._last_failure_ts = _t.time()
         return None
 
 _grok_scanner = GrokSecurityScanner()
