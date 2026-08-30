@@ -71,16 +71,27 @@ log.info("Scrubbed %d secret env vars", len(_scrubbed))
 
 
 def _keep_alive_self_ping():
-    # ping own health route (Flask serve /health on PORT) to avoid free-tier sleep
+    # ping the PUBLIC url (must go out through Render LB so it counts as
+    # inbound activity -> free tier never sleeps). loopback alone does NOT count.
     import urllib.request
     port = int(os.environ.get("PORT", 8080))
-    url = f"http://127.0.0.1:{port}/health"
+    ext = (os.environ.get("RENDER_EXTERNAL_URL")
+           or os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+           or "zex-hosting2x.onrender.com")
+    urls = []
+    if ext.startswith("http"):
+        urls.append(ext.rstrip("/") + "/health")
+    else:
+        urls.append("https://" + ext.strip("/") + "/health")
+    urls.append(f"http://127.0.0.1:{port}/health")
     while True:
-        time.sleep(240)
-        try:
-            urllib.request.urlopen(url, timeout=8)
-        except Exception:
-            pass
+        time.sleep(180)
+        for u in urls:
+            try:
+                urllib.request.urlopen(u, timeout=10)
+                log.debug("self-ping ok %s", u)
+            except Exception as e:
+                log.warning("self-ping fail %s: %s", u, e)
 
 
 # add a /health route on Hbi's Flask app
