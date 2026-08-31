@@ -27,15 +27,41 @@ sys.path.insert(0, 'src')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
 logger = logging.getLogger(__name__)
 
-# Persist bot data under the Render persistent disk (default /var/data/hosting_data).
-# On free Render web services the root disk is ephemeral (wiped on redeploy), so
-# attach a Persistent Disk and mount it at /var/data. TiDB (if configured) is the
-# UI-facing source of truth regardless; this local dir just mirrors current state.
-DATA_DIR = os.environ.get('HOSTING_DATA_DIR', '/var/data/hosting_data')
+# Persist bot data. On Render free there is usually NO persistent disk, so the
+# requested mount (/var/data) may not exist or be writable. Try it first, then
+# transparently fall back to a guaranteed-writable dir (app root or /tmp) so a
+# permissions problem can never crash startup. Note: without a disk the data is
+# ephemeral and wipes on redeploy; TiDB (if configured) survives regardless.
+_DEFAULT_DATA = '/var/data/hosting_data'
+_REQUESTED = os.environ.get('HOSTING_DATA_DIR', _DEFAULT_DATA)
+
+
+def _resolve_data_dir() -> str:
+    candidates = [_REQUESTED]
+    if _REQUESTED != _DEFAULT_DATA:
+        candidates.append(_DEFAULT_DATA)
+    candidates += [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'hosting_data'),
+        '/tmp/hosting_data',
+    ]
+    for cand in candidates:
+        try:
+            os.makedirs(cand, exist_ok=True)
+            probe = os.path.join(cand, '.write_test')
+            with open(probe, 'w') as fh:
+                fh.write('ok')
+            os.remove(probe)
+            return cand
+        except Exception:
+            continue
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'hosting_data')
+
+
+DATA_DIR = _resolve_data_dir()
 os.environ['HOSTING_DATA_DIR'] = DATA_DIR
-os.makedirs(DATA_DIR, exist_ok=True)
 for sub in ('projects', 'logs', 'tmp'):
     os.makedirs(os.path.join(DATA_DIR, sub), exist_ok=True)
+logger.info("HOSTING_DATA_DIR resolved to: %s", DATA_DIR)
 
 # Outbound Telegram Bot API calls go directly to api.telegram.org on Render.
 # Set TG_API_PROXY to route via a proxy instead (only for HF-like setups).
