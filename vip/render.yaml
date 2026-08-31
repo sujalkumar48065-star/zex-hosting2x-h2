@@ -1,14 +1,20 @@
 # render.yaml
 # Deploy the Telegram Hosting Panel to Render as a 24/7 webhook web service.
 #
-#   - Web Service : runs render_app.py (Flask webhook server + bot).
+#   - Web Service     : runs render_app.py (Flask webhook server + bot thread).
 #   - Persistent Disk : mounted at /var/data so local state survives redeploys.
-#   - Cron Job       : pings /health every ~5 min to stop Render's free web
-#                      service from sleeping after ~15 min of inactivity (the
-#                      "inbuilt uptime robot" for Render).
+#
+# 24/7 keep-alive (NO cron job — we avoid Render's cron service):
+#   - The internal keep-alive thread in render_app.py pings /health every 60s
+#     while the process is alive.
+#   - To stop Render's free web service sleeping after ~15 min idle, point an
+#     external uptime monitor (e.g. free UptimeRobot) at
+#     https://<PUBLIC_BASE_URL>/health every 5 min. That external hit counts as
+#     inbound traffic and keeps the service awake around the clock.
 #
 # SECRETS (set in the Render dashboard, do NOT commit):
-#   HOSTING_BOT_TOKEN, HOSTING_OWNER_ID, PUBLIC_BASE_URL, HOSTING_WEBHOOK_SECRET,
+#   HOSTING_BOT_TOKEN (optional), HOSTING_TOKEN_KEY (required if you rely on the
+#   encrypted token), HOSTING_OWNER_ID, PUBLIC_BASE_URL, HOSTING_WEBHOOK_SECRET,
 #   SUB_LINK, and optionally TIDB1_*/TIDB2_* for TiDB failover.
 
 services:
@@ -27,10 +33,16 @@ services:
     envVars:
       - key: HOSTING_DATA_DIR
         value: /var/data/hosting_data
-      # Public URL of THIS web service. Set it in the dashboard after the first
-      # deploy:  https://hosting-panel.onrender.com  (used for the webhook URL).
+      # Public URL of THIS web service (used for the webhook URL and keep-alive).
+      # Set it in the dashboard after the first deploy:
+      #   https://hosting-panel.onrender.com
       - key: PUBLIC_BASE_URL
         sync: false
+      # Fernet key used to decrypt the embedded bot token (see src/main.py).
+      # Value: generate with  python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+      - key: HOSTING_TOKEN_KEY
+        sync: false
+      # Optional: override the embedded token with a plaintext one.
       - key: HOSTING_BOT_TOKEN
         sync: false
       - key: HOSTING_OWNER_ID
@@ -38,20 +50,4 @@ services:
       - key: HOSTING_WEBHOOK_SECRET
         sync: false
       - key: SUB_LINK
-        sync: false
-
-  # Inbuilt uptime robot: pings the web service /health every 5 minutes.
-  # NOTE: Render free CRON jobs run only ONCE a day. To get true 24/7 wake-ups
-  # (every 5 min) you need the cron on a paid plan (starter+). Alternatively use
-  # an external uptime monitor (UptimeRobot free) that hits /health every 5 min.
-  - type: cron
-    name: hosting-keepalive
-    runtime: python
-    plan: free
-    schedule: "*/5 * * * *"
-    buildCommand: pip install requests
-    startCommand: python ping_health.py
-    envVars:
-      # Same public URL as the web service above.
-      - key: HEALTH_URL
         sync: false

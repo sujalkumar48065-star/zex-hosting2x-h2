@@ -43,7 +43,26 @@ from telegram.ext import (
 
 BASE_DIR = Path(__file__).resolve().parent
 
-TOKEN = os.environ.get("HOSTING_BOT_TOKEN", "7868053330:AAE_dhu17W3B-oKCn1VDGN6-_z6lMeRCBWk").strip()
+_ENC_TOKEN = "gAAAAABqlObC5p8ZFOGDRCuz9-YqO7JI7cuqqMGIL7_v9eD4DjxA_9n-SzmOuQTk0hbNRNOl00hXS08ffoJPDaPL1ZXpWzH7BuQ-HRvFF2K3jzo9umOjAkIsjZ5UdVvmp22GFYx6g60O"
+
+
+def _decrypt_token() -> str:
+    # FF to plaintext `HOSTING_BOT_TOKEN` first; otherwise decrypt the embedded
+    # Fernet ciphertext with the key from HOSTING_TOKEN_KEY (never committed).
+    direct = (os.environ.get("HOSTING_BOT_TOKEN") or "").strip()
+    if direct:
+        return direct
+    key = (os.environ.get("HOSTING_TOKEN_KEY") or "").strip()
+    if not key or not _ENC_TOKEN:
+        return ""
+    try:
+        from cryptography.fernet import Fernet
+        return Fernet(key.encode()).decrypt(_ENC_TOKEN.encode()).decode().strip()
+    except Exception:
+        return ""
+
+
+TOKEN = _decrypt_token()
 OWNER_ID = int(os.environ.get("HOSTING_OWNER_ID", "8799679469") or "8799679469")
 SUB_LINK = os.environ.get("HOSTING_SUB_LINK", "https://t.me/Duifioookn2").strip()
 PAID_TEXT = (
