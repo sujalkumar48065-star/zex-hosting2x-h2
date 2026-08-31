@@ -94,6 +94,58 @@ def _bot_supervisor():
 
 threading.Thread(target=_bot_supervisor, daemon=True).start()
 
+
+def _public_base_url() -> str:
+    """Resolve the external base URL, preferring Render's auto-injected env vars
+    (no manual PUBLIC_BASE_URL needed), then explicit overrides. Returns '' when
+    no URL is resolvable."""
+    rext = (os.environ.get('RENDER_EXTERNAL_URL') or os.environ.get('RENDER_EXTERNAL_HOSTNAME') or '')
+    manual = (os.environ.get('PUBLIC_BASE_URL') or os.environ.get('HOST_URL') or '')
+    base = rext or manual
+    base = base.strip()
+    if not base:
+        return ''
+    if not base.startswith('http'):
+        base = 'https://' + base
+    return base.rstrip('/')
+
+
+# Resolve and publish the public base URL at module level so it is available both
+# when run directly and under gunicorn (gunicorn imports this module).
+PORT = int(os.environ.get('PORT', 10000))
+BASE_URL = _public_base_url()
+bot_module.WEBHOOK_SECRET = os.environ.get('HOSTING_WEBHOOK_SECRET', 's3cret_wbhk')
+if BASE_URL:
+    os.environ.setdefault('PUBLIC_BASE_URL', BASE_URL)
+    logger.info("Public base URL: %s (port %s)", BASE_URL, PORT)
+
+
+def _keep_alive():
+    """Inbuilt uptime robot: periodically hit our own health endpoint so the
+    Render free web service never looks idle. A localhost hit alone does NOT
+    keep Render awake — the ping MUST go out through the load balancer, so we
+    always hit the external URL first (using Render's RENDER_EXTERNAL_URL).
+    Pings every 60s and logs failures."""
+    targets = ['http://127.0.0.1:%d/health' % PORT]
+    if BASE_URL:
+        targets.append(BASE_URL + '/health')
+    ok = 0
+    while True:
+        for target in targets:
+            try:
+                urllib.request.urlopen(target, timeout=15).read()
+                ok += 1
+            except Exception as exc:
+                ok = 0
+                logger.error("keep-alive ping %s FAILED: %s", target, exc)
+        if ok % 20 == 0 and ok > 0:
+            logger.info("uptime robot alive, pings ok=%s", ok)
+        time.sleep(60)
+
+
+threading.Thread(target=_keep_alive, daemon=True).start()
+logger.info("Inbuilt uptime robot started (pings /health every 60s)")
+
 from flask import Flask, jsonify, request
 
 app = Flask(__name__)
@@ -128,51 +180,7 @@ def health():
     return jsonify(status='degraded', bot='restarting', polling=False, db=False)
 
 
-def _public_base_url() -> str:
-    """Resolve the external base URL, preferring Render's auto-injected env vars
-    (no manual PUBLIC_BASE_URL needed), then explicit overrides."""
-    # Render sets these automatically:
-    rext = (os.environ.get('RENDER_EXTERNAL_URL') or os.environ.get('RENDER_EXTERNAL_HOSTNAME') or '')
-    manual = (os.environ.get('PUBLIC_BASE_URL') or os.environ.get('HOST_URL') or '')
-    base = rext or manual
-    if not base.startswith('http'):
-        base = 'https://' + base
-    return base.rstrip('/')
-
-
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 10000))
-
-    # Point the bot's webhook URL at the resolved public base so Telegram can
-    # reach it even if PUBLIC_BASE_URL wasn't set manually.
-    bot_module.WEBHOOK_SECRET = os.environ.get('HOSTING_WEBHOOK_SECRET', 's3cret_wbhk')
-    base_url = _public_base_url()
-    if base_url:
-        os.environ.setdefault('PUBLIC_BASE_URL', base_url)
-        logger.info("Public base URL: %s", base_url)
-
-    def keep_alive():
-        """Inbuilt uptime robot: periodically hit our own health endpoint so the
-        Render free web service never looks idle. A localhost hit alone does NOT
-        keep Render awake — the ping MUST go out through the load balancer, so we
-        always hit the external URL first (using Render's RENDER_EXTERNAL_URL).
-        Pings every 60s and logs failures."""
-        targets = ['http://127.0.0.1:%d/health' % port]
-        if base_url:
-            targets.append(base_url + '/health')
-        ok = 0
-        while True:
-            for target in targets:
-                try:
-                    urllib.request.urlopen(target, timeout=15).read()
-                    ok += 1
-                except Exception as exc:
-                    ok = 0
-                    logger.error("keep-alive ping %s FAILED: %s", target, exc)
-            if ok % 20 == 0 and ok > 0:
-                logger.info("uptime robot alive, pings ok=%s", ok)
-            time.sleep(60)
-
-    threading.Thread(target=keep_alive, daemon=True).start()
-    logger.info("Health server + internal keep-alive on port %s", port)
-    app.run(host='0.0.0.0', port=port)
+    # Direct run (single-process dev / Render when not using gunicorn).
+    logger.info("Health server + internal keep-alive on port %s", PORT)
+    app.run(host='0.0.0.0', port=PORT)
