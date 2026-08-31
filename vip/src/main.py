@@ -6052,7 +6052,11 @@ async def _run_async():
     await application.initialize()
     await application.post_init(application)
     await application.start()
-    public = (os.environ.get("HOST_URL") or "https://sujajl-788-ghhjj.hf.space").rstrip("/")
+    public = (
+        os.environ.get("PUBLIC_BASE_URL")
+        or os.environ.get("HOST_URL")
+        or "https://sujajl-788-ghhjj.hf.space"
+    ).rstrip("/")
     webhook_url = f"{public}/webhook/{WEBHOOK_SECRET}"
     try:
         await application.bot.set_webhook(

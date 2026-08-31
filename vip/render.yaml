@@ -1,0 +1,57 @@
+# render.yaml
+# Deploy the Telegram Hosting Panel to Render as a 24/7 webhook web service.
+#
+#   - Web Service : runs render_app.py (Flask webhook server + bot).
+#   - Persistent Disk : mounted at /var/data so local state survives redeploys.
+#   - Cron Job       : pings /health every ~5 min to stop Render's free web
+#                      service from sleeping after ~15 min of inactivity (the
+#                      "inbuilt uptime robot" for Render).
+#
+# SECRETS (set in the Render dashboard, do NOT commit):
+#   HOSTING_BOT_TOKEN, HOSTING_OWNER_ID, PUBLIC_BASE_URL, HOSTING_WEBHOOK_SECRET,
+#   SUB_LINK, and optionally TIDB1_*/TIDB2_* for TiDB failover.
+
+services:
+  - type: web
+    name: hosting-panel
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python render_app.py
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: hosting-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: HOSTING_DATA_DIR
+        value: /var/data/hosting_data
+      # Public URL of THIS web service. Set it in the dashboard after the first
+      # deploy:  https://hosting-panel.onrender.com  (used for the webhook URL).
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: HOSTING_BOT_TOKEN
+        sync: false
+      - key: HOSTING_OWNER_ID
+        sync: false
+      - key: HOSTING_WEBHOOK_SECRET
+        sync: false
+      - key: SUB_LINK
+        sync: false
+
+  # Inbuilt uptime robot: pings the web service /health every 5 minutes.
+  # NOTE: Render free CRON jobs run only ONCE a day. To get true 24/7 wake-ups
+  # (every 5 min) you need the cron on a paid plan (starter+). Alternatively use
+  # an external uptime monitor (UptimeRobot free) that hits /health every 5 min.
+  - type: cron
+    name: hosting-keepalive
+    runtime: python
+    plan: free
+    schedule: "*/5 * * * *"
+    buildCommand: pip install requests
+    startCommand: python ping_health.py
+    envVars:
+      # Same public URL as the web service above.
+      - key: HEALTH_URL
+        sync: false
