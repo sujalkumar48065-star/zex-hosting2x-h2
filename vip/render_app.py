@@ -193,6 +193,39 @@ def webhook(secret):
     return jsonify(status='ok' if ok else 'processing_failed'), (200 if ok else 503)
 
 
+@app.route('/api/status')
+def api_status():
+    try:
+        projects = bot_module.asyncio.run_coroutine_threadsafe(
+            bot_module.list_projects(), bot_module._loop).result(timeout=10)
+    except Exception as exc:
+        return jsonify(error='unavailable', detail=str(exc)), 502
+    out = []
+    for p in projects:
+        out.append({
+            'id': p.get('id'),
+            'name': p.get('name'),
+            'status': p.get('status'),
+            'pid': p.get('pid'),
+            'error': p.get('error'),
+            'crash_count': p.get('crash_count'),
+            'auto_restart': p.get('auto_restart'),
+        })
+    return jsonify(projects=out)
+
+
+@app.route('/api/logs/<int:pid>/<logtype>')
+def api_logs(pid, logtype):
+    if logtype not in ('runtime', 'error', 'deploy'):
+        return jsonify(error='bad logtype'), 400
+    try:
+        text = bot_module.asyncio.run_coroutine_threadsafe(
+            bot_module.tail_log(pid, logtype, 40), bot_module._loop).result(timeout=10)
+    except Exception as exc:
+        return jsonify(error='unavailable', detail=str(exc)), 502
+    return jsonify(pid=pid, logtype=logtype, content=text)
+
+
 @app.route('/health')
 def health():
     try:
