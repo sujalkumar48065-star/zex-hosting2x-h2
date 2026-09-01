@@ -125,6 +125,7 @@ def _hbi_supervisor():
     The HBI bot runs `render_hbi.py` as its own OS process so its global
     `sqlite3 -> TiDB` shim cannot interfere with the VIP bot in this process.
     This supervisor (re)launches it and restarts it if it ever exits."""
+    global _hbi_proc
     run_dir = os.path.dirname(os.path.abspath(__file__))
     failures = 0
     while True:
@@ -154,12 +155,27 @@ def _hbi_supervisor():
         if os.environ.get('HBI_BOT_TOKEN'):
             env['HOSTING2X_BOT_TOKEN'] = os.environ['HBI_BOT_TOKEN']
         try:
-            with open(log_line, 'ab', buffering=0) as fh:
-                proc = subprocess.Popen(
-                    [sys.executable, 'render_hbi.py'],
-                    cwd=run_dir, env=env, stdout=fh, stderr=subprocess.STDOUT)
-                logger.info("Hbi subprocess started (pid=%s)", proc.pid)
-                code = proc.wait()
+            proc = subprocess.Popen(
+                [sys.executable, 'render_hbi.py'],
+                cwd=run_dir, env=env,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            _hbi_proc = proc
+            logger.info("Hbi subprocess started (pid=%s)", proc.pid)
+
+            def _tee_child():
+                try:
+                    with open(log_line, 'ab', buffering=0) as fh:
+                        for raw in iter(proc.stdout.readline, b''):
+                            line = raw.decode('utf-8', 'replace').rstrip()
+                            if not line:
+                                continue
+                            fh.write((line + '\n').encode('utf-8'))
+                            logger.info("[HBI] %s", line)
+                except Exception as exc:
+                    logger.error("Hbi log tee error: %s", exc)
+
+            threading.Thread(target=_tee_child, daemon=True).start()
+            code = proc.wait()
             failures += 1
             delay = min(10 * failures, 60)
             logger.error("Hbi subprocess exited code=%s (failure #%s); restarting in %ss",
@@ -174,6 +190,7 @@ def _hbi_supervisor():
 
 
 threading.Thread(target=_bot_supervisor, daemon=True).start()
+_hbi_proc = None
 if os.environ.get('HBI_DISABLE') != '1':
     threading.Thread(target=_hbi_supervisor, daemon=True).start()
     logger.info("Hbi subprocess supervisor started")
@@ -295,6 +312,23 @@ def health():
     if db_ok:
         return jsonify(status='ok', bot='starting', polling=False, db=True)
     return jsonify(status='degraded', bot='restarting', polling=False, db=False)
+
+
+@app.route('/admin/hbi')
+def admin_hbi():
+    _p = _hbi_proc
+    alive = bool(_p) and _p.poll() is None
+    tail = ''
+    try:
+        inline = os.path.join(DATA_DIR, 'logs', 'hbi_sub.log')
+        with open(inline, 'r', errors='replace') as fh:
+            tail = ''.join(fh.readlines()[-60:])
+    except Exception as exc:
+        tail = 'log unavailable: %s' % exc
+    return jsonify(alive=alive,
+                   returncode=(_p.poll() if _p else None),
+                   pid=(_p.pid if _p else None),
+                   log=tail)
 
 
 if __name__ == '__main__':
