@@ -54,33 +54,45 @@ def _background_sync():
     """Run the TiDB-heavy file/web sync in a background thread so a slow or
     stalled TiDB query can NEVER keep the bot off-line. Every step below is
     time-bounded by tidb_shim (read/write timeouts + failover reconnect) and
-    runs concurrently with polling."""
+    runs concurrently with polling. Each step is isolated so a single stalled
+    query only delays that one step and the periodic sync threads are started
+    as early as possible."""
+    import file_sync
+    import web_sync
+
+    # Start the periodic sync loops FIRST so new user uploads mirror to TiDB
+    # even if the one-time bulk restore below stalls on a slow query.
     try:
-        import file_sync
-        file_sync.ensure_schema()
-        file_sync.migrate_encrypt()
-        try:
-            _restored = file_sync.restore_all(hx.BASE_DIR)
-            log.info("File store restored %d files from TiDB", _restored)
-        except Exception as e:
-            log.error("file restore failed: %s", e)
         file_sync.start_thread(hx.BASE_DIR)
     except Exception as e:
-        log.error("file_sync background start failed: %s", e)
-
+        log.error("file_sync periodic thread failed to start: %s", e)
+    _web_dir = os.path.join(hx.BASE_DIR, "web_files")
     try:
-        import web_sync
-        web_sync.ensure_schema()
-        _web_dir = os.path.join(hx.BASE_DIR, "web_files")
         os.makedirs(_web_dir, exist_ok=True)
-        try:
-            _restored_web = web_sync.restore_files(_web_dir)
-            log.info("Web files restored %d from TiDB", _restored_web)
-        except Exception as e:
-            log.error("web restore failed: %s", e)
         web_sync.start_thread(_web_dir)
     except Exception as e:
-        log.error("web_sync background start failed: %s", e)
+        log.error("web_sync periodic thread failed to start: %s", e)
+
+    for name, fn in [
+        ("file_sync.ensure_schema", file_sync.ensure_schema),
+        ("file_sync.migrate_encrypt", file_sync.migrate_encrypt),
+        ("web_sync.ensure_schema", web_sync.ensure_schema),
+    ]:
+        try:
+            fn()
+        except Exception as e:
+            log.error("%s failed: %s", name, e)
+
+    try:
+        _restored = file_sync.restore_all(hx.BASE_DIR)
+        log.info("File store restored %d files from TiDB", _restored)
+    except Exception as e:
+        log.error("file restore failed: %s", e)
+    try:
+        _restored_web = web_sync.restore_files(_web_dir)
+        log.info("Web files restored %d from TiDB", _restored_web)
+    except Exception as e:
+        log.error("web restore failed: %s", e)
 
     try:
         hx._restore_after_reboot()
