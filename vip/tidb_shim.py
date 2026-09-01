@@ -6,6 +6,7 @@ TiDB Cloud Serverless with dual-account failover (same accounts as h1).
 """
 import logging
 import os
+import socket
 import threading
 import time
 
@@ -98,6 +99,7 @@ def _connect_account(idx):
     return pymysql.connect(
         host=a["host"], port=a["port"], user=a["user"], password=a["password"],
         database=a["database"], connect_timeout=15,
+        read_timeout=90, write_timeout=30,   # never block a query forever
         ssl_verify_cert=True, ssl_verify_identity=True,
         charset="utf8mb4", autocommit=False,
     )
@@ -131,22 +133,20 @@ class Cursor:
             self._cur = self._conn._db.cursor()
             self._cur.execute(mysql_sql, params or None)
             self.lastrowid = getattr(self._cur, "lastrowid", None)
-        except (OperationalError, InterfaceError) as e:
+        except (OperationalError, InterfaceError, OSError, socket.timeout, TimeoutError) as e:
             code = e.args[0] if e.args else None
-            if code in FAILOVER_CODES:
+            if code in FAILOVER_CODES or isinstance(e, (socket.timeout, TimeoutError, ConnectionResetError)):
                 other = (_active[0] + 1) % len(_ACCOUNTS) if _ACCOUNTS else 0
                 with _switch_lock:
                     _active[0] = other
                 log.warning("Query failed on account #%s (%s) - retrying on #%s",
                             _active[0] + 1 if _ACCOUNTS else "?", code, other + 1)
-                new = _raw_connect()
-                old = self._conn._db
                 try:
-                    old.close()
+                    self._conn._db.close()
                 except Exception:
                     pass
-                self._conn._db = new
-                self._cur = new.cursor()
+                self._conn._db = _raw_connect()
+                self._cur = self._conn._db.cursor()
                 self._cur.execute(mysql_sql, params or None)
             else:
                 raise

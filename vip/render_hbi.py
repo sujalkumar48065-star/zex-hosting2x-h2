@@ -49,30 +49,47 @@ else:
 # import bot module (registers handlers; init_db()+load_data() at module level)
 import Hbi as hx  # noqa: E402
 
-# persistent file store: upload_bots/ mirrored into TiDB
-import file_sync  # noqa: E402
 
-file_sync.ensure_schema()
-file_sync.migrate_encrypt()
-try:
-    _restored = file_sync.restore_all(hx.BASE_DIR)
-    log.info("File store restored %d files from TiDB", _restored)
-except Exception as e:
-    log.error("file restore failed: %s", e)
-file_sync.start_thread(hx.BASE_DIR)
+def _background_sync():
+    """Run the TiDB-heavy file/web sync in a background thread so a slow or
+    stalled TiDB query can NEVER keep the bot off-line. Every step below is
+    time-bounded by tidb_shim (read/write timeouts + failover reconnect) and
+    runs concurrently with polling."""
+    try:
+        import file_sync
+        file_sync.ensure_schema()
+        file_sync.migrate_encrypt()
+        try:
+            _restored = file_sync.restore_all(hx.BASE_DIR)
+            log.info("File store restored %d files from TiDB", _restored)
+        except Exception as e:
+            log.error("file restore failed: %s", e)
+        file_sync.start_thread(hx.BASE_DIR)
+    except Exception as e:
+        log.error("file_sync background start failed: %s", e)
 
-# web hosting persistence
-import web_sync  # noqa: E402
+    try:
+        import web_sync
+        web_sync.ensure_schema()
+        _web_dir = os.path.join(hx.BASE_DIR, "web_files")
+        os.makedirs(_web_dir, exist_ok=True)
+        try:
+            _restored_web = web_sync.restore_files(_web_dir)
+            log.info("Web files restored %d from TiDB", _restored_web)
+        except Exception as e:
+            log.error("web restore failed: %s", e)
+        web_sync.start_thread(_web_dir)
+    except Exception as e:
+        log.error("web_sync background start failed: %s", e)
 
-web_sync.ensure_schema()
-_web_dir = os.path.join(hx.BASE_DIR, "web_files")
-os.makedirs(_web_dir, exist_ok=True)
-try:
-    _restored_web = web_sync.restore_files(_web_dir)
-    log.info("Web files restored %d from TiDB", _restored_web)
-except Exception as e:
-    log.error("web restore failed: %s", e)
-web_sync.start_thread(_web_dir)
+    try:
+        hx._restore_after_reboot()
+    except Exception as e:
+        log.error("reboot restore failed: %s", e)
+
+
+threading.Thread(target=_background_sync, daemon=True, name="hbi-bg-sync").start()
+log.info("Background TiDB sync thread started (polling will start immediately)")
 
 
 def _poll_loop():
@@ -95,9 +112,5 @@ def _poll_loop():
 
 
 if __name__ == "__main__":
-    log.info("Hbi bot runner started in subprocess mode (polling only, no Flask).")
-    try:
-        threading.Thread(target=hx._restore_after_reboot, daemon=True).start()
-    except Exception as e:
-        log.error("reboot restore thread failed: %s", e)
+    log.info("Hbi bot runner started in subprocess mode (polling first, sync in background).")
     _poll_loop()
