@@ -16,6 +16,7 @@
 import asyncio
 import logging
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -118,7 +119,64 @@ def _bot_supervisor():
             failures = 0
 
 
+def _hbi_supervisor():
+    """Remote self-healing for the HBI bot (separate subprocess).
+
+    The HBI bot runs `render_hbi.py` as its own OS process so its global
+    `sqlite3 -> TiDB` shim cannot interfere with the VIP bot in this process.
+    This supervisor (re)launches it and restarts it if it ever exits."""
+    run_dir = os.path.dirname(os.path.abspath(__file__))
+    failures = 0
+    while True:
+        log_line = os.path.join(DATA_DIR, 'logs', 'hbi_sub.log')
+        os.makedirs(os.path.dirname(log_line), exist_ok=True)
+        env = dict(os.environ)
+        env['HBI_SUBPROCESS'] = '1'
+        # The VIP bot in THIS process reads TIDB1_*/TIDB2_* too (its bootstrap()
+        # enables TiDB when both accounts are present), so we must NOT leak the
+        # Hbi credentials into the shared env. Inject them ONLY into the child:
+        #   HBI_TIDB1_* / HBI_TIDB2_*  ->  TIDB1_* / TIDB2_*  (child only)
+        #   HBI_BOT_TOKEN              ->  HOSTING2X_BOT_TOKEN (child only)
+        for prefix in ('HBI_TIDB1', 'HBI_TIDB2'):
+            dst = prefix.replace('HBI_', '')
+            if os.environ.get(prefix + '_HOST'):
+                env[dst + '_HOST'] = os.environ[prefix + '_HOST']
+            if os.environ.get(prefix + '_PORT'):
+                env[dst + '_PORT'] = os.environ[prefix + '_PORT']
+            if os.environ.get(prefix + '_USER'):
+                env[dst + '_USER'] = os.environ[prefix + '_USER']
+            if os.environ.get(prefix + '_PASS'):
+                env[dst + '_PASS'] = os.environ[prefix + '_PASS']
+            if os.environ.get(prefix + '_DB'):
+                env[dst + '_DB'] = os.environ[prefix + '_DB']
+        if os.environ.get('HBI_TIDB_DB'):
+            env['TIDB_DEFAULT_DB'] = os.environ['HBI_TIDB_DB']
+        if os.environ.get('HBI_BOT_TOKEN'):
+            env['HOSTING2X_BOT_TOKEN'] = os.environ['HBI_BOT_TOKEN']
+        try:
+            with open(log_line, 'ab', buffering=0) as fh:
+                proc = subprocess.Popen(
+                    [sys.executable, 'render_hbi.py'],
+                    cwd=run_dir, env=env, stdout=fh, stderr=subprocess.STDOUT)
+                logger.info("Hbi subprocess started (pid=%s)", proc.pid)
+                code = proc.wait()
+            failures += 1
+            delay = min(10 * failures, 60)
+            logger.error("Hbi subprocess exited code=%s (failure #%s); restarting in %ss",
+                         code, failures, delay)
+            time.sleep(delay)
+            if failures >= 12:
+                failures = 0
+        except Exception as exc:
+            failures += 1
+            logger.error("Hbi supervisor error: %s", exc)
+            time.sleep(10)
+
+
 threading.Thread(target=_bot_supervisor, daemon=True).start()
+if os.environ.get('HBI_DISABLE') != '1':
+    threading.Thread(target=_hbi_supervisor, daemon=True).start()
+    logger.info("Hbi subprocess supervisor started")
 
 
 def _public_base_url() -> str:
