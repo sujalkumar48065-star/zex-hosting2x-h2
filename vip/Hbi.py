@@ -263,6 +263,13 @@ _gh_counter = [0]
 gh_manifest = {}      # deployed github repos {uid_fname: {'uid','url','fname','ftype','added'}}
 GH_MANIFEST_PATH = os.path.join(IROTECH_DIR, 'gh_manifest.json')
 
+# --- WhatsApp Hosting State (separate queue/folders - never mixed with telegram bots) ---
+wa_sessions = {}          # {user_id: True} - WA file upload armed via WA Upload button
+wa_bot_scripts = {}       # running WhatsApp bot processes {script_key: info}
+wa_user_files = {}        # {user_id: [(file_name, file_type)]}
+wa_pending_zip_files = {} # {user_id: {file_name: file_content}} pending admin decision
+WA_UPLOAD_BOTS_DIR = os.path.join(BASE_DIR, 'wa_uploads')
+
 # --- Security Settings ---
 SECURITY_CONFIG = {
     'blocked_modules': ['os.system', 'os', 'zipfile', 'subprocess.Popen', 'subprocess', 'eval', 'exec','compile', '__import__'],
@@ -282,8 +289,8 @@ COMMAND_BUTTONS_LAYOUT_USER_SPEC = [
     ["⬆️ ᴅᴇᴘʟᴏʏ ʙᴏᴛ", "🗂️ ᴍʏ ʙᴏᴛꜱ"],
     ["🌐 ᴡᴇʙ ʜᴏꜱᴛ", "🌐 ᴍʏ ᴡᴇʙ"],
     ["🧩 ɪɴꜱᴛᴀʟʟ", "🌀 ꜱᴘᴇᴇᴅ"],
-    ["📊 ꜱᴛᴀᴛꜱ", "❔ ɢᴜɪᴅᴇ"],
-    ["📡 ᴜᴘᴅᴀᴛᴇꜱ"],
+    ["📱 ᴡʜᴀᴛꜱᴀᴘᴘ ꜱᴇᴛᴜᴘ", "❔ ɢᴜɪᴅᴇ"],
+    ["📊 ꜱᴛᴀᴛꜱ", "📡 ᴜᴘᴅᴀᴛᴇꜱ"],
     ["💬 ᴅᴇᴠᴇʟᴏᴘᴇʀ"]
 ]
 
@@ -291,14 +298,18 @@ ADMIN_COMMAND_BUTTONS_LAYOUT_USER_SPEC = [
     ["⬆️ ᴅᴇᴘʟᴏʏ ʙᴏᴛ", "🗂️ ᴍʏ ʙᴏᴛꜱ"],
     ["🌐 ᴡᴇʙ ʜᴏꜱᴛ", "🌐 ᴍʏ ᴡᴇʙ"],
     ["🧩 ɪɴꜱᴛᴀʟʟ", "🌀 ꜱᴘᴇᴇᴅ"],
-    ["📊 ꜱᴛᴀᴛꜱ", "❔ ɢᴜɪᴅᴇ"],
+    ["📱 ᴡʜᴀᴛꜱᴀᴘᴘ ꜱᴇᴛᴜᴘ", "❔ ɢᴜɪᴅᴇ"],
+    ["📊 ꜱᴛᴀᴛꜱ", "📡 ᴜᴘᴅᴀᴛᴇꜱ"],
+    ["🛡️ ᴀᴅᴍɪɴ ᴘᴀɴᴇʟ", "💬 ᴅᴇᴠᴇʟᴏᴘᴇʀ"]
+]
+
+ADMIN_COMMAND_BUTTONS_LAYOUT_PANEL = [
     ["💳 ꜱᴜʙꜱ", "📮 ʙʀᴏᴀᴅᴄᴀꜱᴛ"],
     ["⛔ ʟᴏᴄᴋ", "♻️ ʀᴜɴ ᴀʟʟ"],
-    ["🛡️ ᴀᴅᴍɪɴ", "👥 ᴜꜱᴇʀꜱ"],
-    ["🔧 ꜱᴇᴛᴛɪɴɢ", "📡 ᴄʜᴀɴɴᴇʟ"],
-    ["⏹ ꜱᴛᴏᴘ ᴀʟʟ", "🧹 ᴄʟᴇᴀɴᴜᴘ"],
-    ["📡 ᴜᴘᴅᴀᴛᴇꜱ"],
-    ["💬 ᴅᴇᴠᴇʟᴏᴘᴇʀ"]
+    ["👥 ᴜꜱᴇʀꜱ", "🔧 ꜱᴇᴛᴛɪɴɢ"],
+    ["📡 ᴄʜᴀɴɴᴇʟ", "⏹ ꜱᴛᴏᴘ ᴀʟʟ"],
+    ["🧹 ᴄʟᴇᴀɴᴜᴘ", "🛡️ ᴀᴅᴍɪɴ"],
+    ["🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"]
 ]
 
 # --- Database Setup ---
@@ -1906,11 +1917,11 @@ def create_mandatory_channels_menu():
     """Create mandatory channels management menu"""
     markup = types.InlineKeyboardMarkup(row_width=2)
     markup.row(
-        types.InlineKeyboardButton('➕ Add Channel', callback_data='add_mandatory_channel'),
-        types.InlineKeyboardButton('➖ Remove Channel', callback_data='remove_mandatory_channel')
+        types.InlineKeyboardButton('➕ ᴀᴅᴅ ᴄʜᴀɴɴᴇʟ', callback_data='add_mandatory_channel'),
+        types.InlineKeyboardButton('➖ ʀᴇᴍᴏᴠᴇ ᴄʜᴀɴɴᴇʟ', callback_data='remove_mandatory_channel')
     )
-    markup.row(types.InlineKeyboardButton('📋 List Channels', callback_data='list_mandatory_channels'))
-    markup.row(types.InlineKeyboardButton('🔙 Back to Main', callback_data='back_to_main'))
+    markup.row(types.InlineKeyboardButton('📋 ʟɪꜱᴛ ᴄʜᴀɴɴᴇʟꜱ', callback_data='list_mandatory_channels'))
+    markup.row(types.InlineKeyboardButton('🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ', callback_data='back_to_main'))
     return markup
 
 def create_subscription_check_message(not_joined_channels):
@@ -1931,7 +1942,7 @@ def create_subscription_check_message(not_joined_channels):
         message += f"• {channel_name}\n"
         markup.add(types.InlineKeyboardButton(f"{channel_name}", url=channel_link))
     
-    markup.add(types.InlineKeyboardButton("\u2705 i joined \u2014 verify", callback_data='check_subscription_status'))
+    markup.add(types.InlineKeyboardButton("\u2705 ɪ ᴊᴏɪɴᴇᴅ \u2014 ᴠᴇʀɪꜰʏ", callback_data='check_subscription_status'))
     
     return message, markup
 
@@ -2047,6 +2058,86 @@ def get_user_file_limit(user_id):
 def get_user_file_count(user_id):
     """Get the number of files uploaded by a user"""
     return len(user_files.get(user_id, []))
+
+def get_wa_user_folder(user_id):
+    """Get or create user's folder for WhatsApp bot files"""
+    user_folder = os.path.join(WA_UPLOAD_BOTS_DIR, str(user_id))
+    os.makedirs(user_folder, exist_ok=True)
+    return user_folder
+
+def get_wa_user_file_limit(user_id):
+    """WhatsApp bot slots: free users get 1, subscribed/admin/owner unlimited."""
+    if user_id == OWNER_ID or user_id in admin_ids: return float('inf')
+    if user_id in user_limits: return user_limits[user_id]
+    if user_id in user_subscriptions and user_subscriptions[user_id]['expiry'] > datetime.now():
+        return float('inf')
+    return 1
+
+def get_wa_user_file_count(user_id):
+    """Get the number of WhatsApp bot files uploaded by a user"""
+    return len(wa_user_files.get(user_id, []))
+
+def is_wa_bot_running(script_owner_id, file_name):
+    """Check if a WhatsApp bot script is currently running for a specific user"""
+    script_key = f"{script_owner_id}_{file_name}"
+    script_info = wa_bot_scripts.get(script_key)
+    if script_info and script_info.get('process'):
+        try:
+            proc = psutil.Process(script_info['process'].pid)
+            is_running = proc.is_running() and proc.status() != psutil.STATUS_ZOMBIE
+            if not is_running:
+                logger.warning(f"WA process {script_info['process'].pid} for {script_key} not running/zombie. Cleaning up.")
+                if 'log_file' in script_info and hasattr(script_info['log_file'], 'close') and not script_info['log_file'].closed:
+                    try: script_info['log_file'].close()
+                    except Exception as log_e: logger.error(f"Error closing WA log file {script_key}: {log_e}")
+                if script_key in wa_bot_scripts: del wa_bot_scripts[script_key]
+            return is_running
+        except psutil.NoSuchProcess:
+            logger.warning(f"WA process for {script_key} not found (NoSuchProcess). Cleaning up.")
+            if 'log_file' in script_info and hasattr(script_info['log_file'], 'close') and not script_info['log_file'].closed:
+                try: script_info['log_file'].close()
+                except Exception as log_e: logger.error(f"Error closing WA log {script_key}: {log_e}")
+            if script_key in wa_bot_scripts: del wa_bot_scripts[script_key]
+            return False
+        except Exception as e:
+            logger.error(f"Error checking WA process status for {script_key}: {e}", exc_info=True)
+            return False
+    return False
+
+WA_MANIFEST_PATH = os.path.join(IROTECH_DIR, 'wa_manifest.json')
+
+def load_wa_manifest():
+    global wa_user_files
+    try:
+        if os.path.exists(WA_MANIFEST_PATH):
+            with open(WA_MANIFEST_PATH, 'r', encoding='utf-8') as f:
+                raw = json.load(f)
+            for uid_str, files in (raw or {}).items():
+                uid = int(uid_str)
+                wa_user_files[uid] = [(fn, ft) for fn, ft in files]
+    except Exception as e:
+        logger.error(f"Error loading WA manifest: {e}", exc_info=True)
+
+def save_wa_file2db(user_id, file_name, file_type='py'):
+    if user_id not in wa_user_files: wa_user_files[user_id] = []
+    wa_user_files[user_id] = [(fn, ft) for fn, ft in wa_user_files.get(user_id, []) if fn != file_name]
+    wa_user_files[user_id].append((file_name, file_type))
+    _save_wa_manifest()
+
+def remove_wa_file2db(user_id, file_name):
+    if user_id in wa_user_files:
+        wa_user_files[user_id] = [(fn, ft) for fn, ft in wa_user_files[user_id] if fn != file_name]
+        if not wa_user_files[user_id]: wa_user_files.pop(user_id, None)
+    _save_wa_manifest()
+
+def _save_wa_manifest():
+    try:
+        with open(WA_MANIFEST_PATH, 'w', encoding='utf-8') as f:
+            json.dump({str(u): v for u, v in wa_user_files.items() if v}, f)
+    except Exception as e:
+        logger.error(f"Error saving WA manifest: {e}", exc_info=True)
+
+load_wa_manifest()
 
 def is_bot_running(script_owner_id, file_name):
     """Check if a bot script is currently running for a specific user"""
@@ -2618,6 +2709,24 @@ def create_reply_keyboard_main_menu(user_id):
         markup.add(*[types.KeyboardButton(text) for text in row_buttons_text])
     return markup
 
+def create_reply_keyboard_admin_panel(user_id):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    layout_to_use = ADMIN_COMMAND_BUTTONS_LAYOUT_PANEL if user_id in admin_ids else [["🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"]]
+    for row_buttons_text in layout_to_use:
+        markup.add(*[types.KeyboardButton(text) for text in row_buttons_text])
+    return markup
+
+def create_reply_keyboard_wa_menu(user_id):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    layout = [
+        ["⬆️ ᴡʜ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ", "📱 ᴍʏ ᴡʜᴀᴛꜱᴀᴘᴘ"],
+        ["🧩 ᴡʜ ᴅᴇᴘᴇɴᴅᴇɴᴄʏ", "🌀 ᴡʜ ꜱᴘᴇᴇᴅ"],
+        ["🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"]
+    ]
+    for row_buttons_text in layout:
+        markup.add(*[types.KeyboardButton(text) for text in row_buttons_text])
+    return markup
+
 def create_control_buttons(script_owner_id, file_name, is_running=True):
     markup = types.InlineKeyboardMarkup(row_width=2)
     if is_running:
@@ -2638,6 +2747,28 @@ def create_control_buttons(script_owner_id, file_name, is_running=True):
             types.InlineKeyboardButton("📝 ᴠɪᴇᴡ ʟᴏɢꜱ", callback_data=f'logs_{script_owner_id}_{file_name}')
         )
     markup.add(types.InlineKeyboardButton("↩️ ʙᴀᴄᴋ ᴛᴏ ꜰɪʟᴇꜱ", callback_data='check_files'))
+    return markup
+
+def create_wa_control_buttons(script_owner_id, file_name, is_running=True):
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    if is_running:
+        markup.row(
+            types.InlineKeyboardButton("⏹ ꜱᴛᴏᴘ", callback_data=f'wastop_{script_owner_id}_{file_name}'),
+            types.InlineKeyboardButton("♻️ ʀᴇꜱᴛᴀʀᴛ", callback_data=f'warestart_{script_owner_id}_{file_name}')
+        )
+        markup.row(
+            types.InlineKeyboardButton("🗑 ᴅᴇʟᴇᴛᴇ", callback_data=f'wadelete_{script_owner_id}_{file_name}'),
+            types.InlineKeyboardButton("📝 ʟᴏɢꜱ", callback_data=f'walogs_{script_owner_id}_{file_name}')
+        )
+    else:
+        markup.row(
+            types.InlineKeyboardButton("▶️ ꜱᴛᴀʀᴛ", callback_data=f'wastart_{script_owner_id}_{file_name}'),
+            types.InlineKeyboardButton("🗑 ᴅᴇʟᴇᴛᴇ", callback_data=f'wadelete_{script_owner_id}_{file_name}')
+        )
+        markup.row(
+            types.InlineKeyboardButton("📝 ᴠɪᴇᴡ ʟᴏɢꜱ", callback_data=f'walogs_{script_owner_id}_{file_name}')
+        )
+    markup.add(types.InlineKeyboardButton("↩️ ʙᴀᴄᴋ ᴛᴏ ᴡʜᴀᴛꜱᴀᴘᴘ", callback_data='wa_back'))
     return markup
 
 def create_admin_panel():
@@ -3202,6 +3333,7 @@ def _logic_updates_channel(message):
 def _logic_upload_file(message):
     user_id = message.from_user.id
     web_sessions.pop(user_id, None)  # ensure bot-flow only; never mix with web flow
+    wa_sessions.pop(user_id, None)   # ensure bot-flow only; never mix with WA flow
     
     # Check if user is banned
     if is_user_banned(user_id):
@@ -3318,6 +3450,14 @@ def _logic_help(message):
         "┃ 3️⃣ ᴄʜᴏᴏꜱᴇ ᴀ ɴᴀᴍᴇ → ꜱᴄᴀɴ → ✅\n"
         "┃ 4️⃣ ɢᴇᴛ ʏᴏᴜʀ ʟɪᴠᴇ ʟɪɴᴋ 🎉\n"
         "┃ 🗂️ ᴍᴀɴᴀɢᴇ → ᴍʏ ᴡᴇʙ\n"
+        "╰━━━━━━━━━━━━━━━━━━╯\n\n"
+        "╭━━━「 📱 ᴡʜᴀᴛꜱᴀᴘᴘ ʜᴏꜱᴛɪɴɢ 」━━━╮\n"
+        "┃ 1️⃣ ᴛᴀᴘ 📱 ᴡʜᴀᴛꜱᴀᴘᴘ ꜱᴇᴛᴜᴘ\n"
+        "┃ 2️⃣ ᴛᴀᴘ ⬆️ ᴡʜ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ\n"
+        "┃ 3️⃣ ꜱᴇɴᴅ .ᴘʏ · .ᴊꜱ · .ᴢɪᴘ (ᴍᴀx 20ᴍʙ)\n"
+        "┃ 4️⃣ 🛡️ ᴀɪ ꜱᴄᴀɴ → ᴀᴅᴍɪɴ ✅ → ᴀᴜᴛᴏ-ꜱᴛᴀʀᴛ ⚡\n"
+        "┃ 🧩 ᴡʜ ᴅᴇᴘᴇɴᴅᴇɴᴄʏ → ʟɪʙʀᴀʀʏ\n"
+        "┃ 📱 ᴍʏ ᴡʜᴀᴛꜱᴀᴘᴘ → ʙᴏᴛꜱ\n"
         "╰━━━━━━━━━━━━━━━━━━╯\n\n"
         "╭━━━「 💎 ꜱʟᴏᴛꜱ & ʟɪᴍɪᴛꜱ 」━━━╮\n"
         "┃ ꜰʀᴇᴇ : 2 ʙᴏᴛ · 1 ᴡᴇʙ\n"
@@ -3443,6 +3583,16 @@ def _logic_statistics_impl(message, uid=None):
 
     if user_id in admin_ids:
         total_users = len(active_users_snap)
+        try:
+            with DB_LOCK:
+                _c = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
+                _c2 = _c.cursor()
+                _c2.execute("SELECT COUNT(*) FROM active_users")
+                total_users = _c2.fetchone()[0]
+                _c.close()
+        except Exception as e:
+            logger.error(f"stats live member count err: {e}")
+            total_users = len(active_users_snap)
         total_files_records = sum(len(files) for files in user_files_snap.values())
         today_str = datetime.now().strftime('%Y-%m-%d')
         new_today = active_today = premium_count = 0
@@ -3522,6 +3672,14 @@ def _logic_admin_panel(message):
         return
     bot.reply_to(message, "\U0001F451 admin zone\nmanage admins below \U0001F447", 
                  reply_markup=create_admin_panel())
+
+def _logic_admin_panel_menu(message):
+    user_id = message.from_user.id
+    if user_id not in admin_ids:
+        bot.reply_to(message, "\U0001F512 staff only area.")
+        return
+    bot.reply_to(message, "\U0001F451 ᴀᴅᴍɪɴ ᴘᴀɴᴇʟ\nꜱᴀʀᴇ ᴀᴅᴍɪɴ ᴄᴏɴᴛʀᴏʟꜱ ʏᴀʜᴀ ᴘᴀʀ \U0001F447", 
+                 reply_markup=create_reply_keyboard_admin_panel(user_id))
 
 def _logic_user_management(message):
     if message.from_user.id not in admin_ids:
@@ -3725,6 +3883,9 @@ def _logic_owner_health(message):
 
     total_files = sum(len(files) for files in user_files.values())
     parts.append(f"• Projects registered: {total_files} across {len(user_files)} user(s)")
+
+    wa_total = sum(len(files) for files in wa_user_files.values())
+    parts.append(f"• WhatsApp bots: {wa_total} registered across {len(wa_user_files)} user(s) · {len(wa_bot_scripts)} running")
 
     for label, d in (("Uploads", UPLOAD_BOTS_DIR), ("Data", IROTECH_DIR)):
         parts.append(f"• {label} dir: {'✅ exists' if os.path.isdir(d) else '❌ missing'}")
@@ -4316,6 +4477,7 @@ def _web_extra_scan(content_bytes, ftype):
 def _logic_web_host(message):
     uid = message.from_user.id
     deploy_sessions.pop(uid, None)  # ensure web-flow only; never mix with bot flow
+    wa_sessions.pop(uid, None)      # ensure web-flow only; never mix with WA flow
     if is_user_banned(uid):
         bot.reply_to(message, "⛔ "+_t("your account is restricted from this bot"))
         return
@@ -4738,6 +4900,160 @@ def command_version(message): _logic_owner_version(message)
 @bot.message_handler(commands=['restart'])
 def command_restart(message): _logic_user_restart(message)
 
+# ==================== WHATSAPP HOSTING ====================
+WA_BTN_MAIN = "📱 ᴡʜᴀᴛꜱᴀᴘᴘ ꜱᴇᴛᴜᴘ"
+WA_BTN_UPLOAD = "⬆️ ᴡʜ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ"
+WA_BTN_MY = "📱 ᴍʏ ᴡʜᴀᴛꜱᴀᴘᴘ"
+WA_BTN_DEP = "🧩 ᴡʜ ᴅᴇᴘᴇɴᴅᴇɴᴄʏ"
+WA_BTN_SPEED = "🌀 ᴡʜ ꜱᴘᴇᴇᴅ"
+WA_BTN_BACK = "🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"
+
+def _logic_wa_main_menu(message):
+    user_id = message.from_user.id
+    if is_user_banned(user_id):
+        bot.reply_to(message, "\u26D4 your account is restricted from this bot.")
+        return
+    is_subscribed, not_joined = check_mandatory_subscription(user_id)
+    if not is_subscribed and user_id not in admin_ids:
+        subscription_message, markup = create_subscription_check_message(not_joined)
+        bot.reply_to(message, subscription_message, reply_markup=markup, parse_mode='Markdown')
+        return
+    wa_text = (
+        "\U0001F4F1 𝐖𝐡𝐚𝐭𝐬𝐀𝐩𝐩 ʙᴏᴛ ʜᴏꜱᴛɪɴɢ\n\n"
+        "┃ ⬆️ ᴡʜ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ  — `.py` · `.js` · `.zip`\n"
+        "┃ 📱 ᴍʏ ᴡʜᴀᴛꜱᴀᴘᴘ      — ᴄʜᴀʟᴛᴇ ʙᴏᴛꜱ ᴍᴀɴᴀɢᴇ\n"
+        "┃ 🧩 ᴡʜ ᴅᴇᴘᴇɴᴅᴇɴᴄʏ     — ʟɪʙʀᴀʀʏ ɪɴꜱᴛᴀʟʟ\n"
+        "┃ 🌀 ᴡʜ ꜱᴘᴇᴇᴅ          — ᴡʜ ᴘɪɴɢ\n"
+        "┃ 🔙 ʙᴀᴄᴋ              — ᴍᴀɪɴ ᴍᴇɴᴜ\n\n"
+        "\U0001F6A9 ʜᴀʀ ᴡʜᴀᴛꜱᴀᴘᴘ ꜰɪʟᴇ ꜱᴄᴀɴ ʜᴏᴋᴀʀ ᴀᴅᴍɪɴ ᴀᴘᴘʀᴏᴠᴀʟ ᴋᴇ ʙᴀᴀᴅ ʜɪ ʀᴜɴ ʜᴏᴛɪ ʜᴀɪ"
+    )
+    bot.reply_to(message, wa_text, reply_markup=create_reply_keyboard_wa_menu(user_id))
+
+def _logic_wa_upload(message):
+    user_id = message.from_user.id
+    web_sessions.pop(user_id, None)
+    deploy_sessions.pop(user_id, None)
+    if is_user_banned(user_id):
+        bot.reply_to(message, "\u26D4 your account is restricted from this bot.")
+        return
+    is_subscribed, not_joined = check_mandatory_subscription(user_id)
+    if not is_subscribed and user_id not in admin_ids:
+        subscription_message, markup = create_subscription_check_message(not_joined)
+        bot.reply_to(message, subscription_message, reply_markup=markup, parse_mode='Markdown')
+        return
+    if bot_locked and user_id not in admin_ids:
+        bot.reply_to(message, "\U0001F527 under maintenance \u2014 uploads paused.")
+        return
+    file_limit = get_wa_user_file_limit(user_id)
+    current_files = get_wa_user_file_count(user_id)
+    if current_files >= file_limit:
+        limit_str = str(file_limit) if file_limit != float('inf') else "Unlimited"
+        bot.reply_to(message, f"\U0001F9BA {_t('slots full')} [{current_files}/{limit_str}] \u2014 {_t('remove one or buy subscription')} \u2192 {_t('contact')} {YOUR_USERNAME}")
+        return
+    wa_sessions[user_id] = True
+    bot.reply_to(message, f"\U0001F3AF ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛ ᴋᴇ ʟɪʏᴇ `.py` · `.js` · `.zip` ꜰɪʟᴇ ʙʜᴇᴊᴏ\ntɪᴛᴘɪɴɢ ⬆️ ᴡʜ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ ᴘʜɪʀ ꜰɪʟᴇ", parse_mode='Markdown')
+
+def _logic_wa_dependency(message):
+    user_id = message.from_user.id
+    if is_user_banned(user_id):
+        bot.reply_to(message, "\u26D4 your account is restricted from this bot.")
+        return
+    is_subscribed, not_joined = check_mandatory_subscription(user_id)
+    if not is_subscribed and user_id not in admin_ids:
+        subscription_message, markup = create_subscription_check_message(not_joined)
+        bot.reply_to(message, subscription_message, reply_markup=markup, parse_mode='Markdown')
+        return
+    if bot_locked and user_id not in admin_ids:
+        bot.reply_to(message, "⚠️ Bot locked by admin. Try later.")
+        return
+    bot.reply_to(message, "\U0001F9E9 ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛ ᴋᴇ ʟɪʏᴇ ɴᴀᴍᴇ ʙʜᴇᴊᴏ\n(e.g. `pillow` · `opencv` · `requests` · node: `npm:name`)\n/cancel to quit")
+    bot.register_next_step_handler(message, _process_wa_install_module)
+
+def _process_wa_install_module(message):
+    user_id = message.from_user.id
+    if is_user_banned(user_id):
+        bot.reply_to(message, "\u26D4 your account is restricted from this bot.")
+        return
+    if message.text and message.text.lower() == '/cancel':
+        bot.reply_to(message, "\u2716\uFE0F install cancelled.", reply_markup=create_reply_keyboard_wa_menu(user_id))
+        return
+    module_name = (message.text or '').strip()
+    if not module_name:
+        bot.reply_to(message, "\u2754 kuch bhejo na.")
+        return
+    if module_name.lower().startswith('npm:'):
+        module_name = module_name[4:].strip()
+        wa_folder = get_wa_user_folder(user_id)
+        success, log = attempt_install_npm(module_name, wa_folder, message, manual_request=True)
+    else:
+        success, log = attempt_install_pip(module_name, message, manual_request=True)
+    if success:
+        logger.info(f"User {user_id} installed module {module_name} for WA bot")
+
+def _logic_wa_speed(message):
+    user_id = message.from_user.id
+    start_time_ping = time.time()
+    wait_msg = bot.reply_to(message, "\U0001F4E1 pinging...")
+    try:
+        bot.send_chat_action(message.chat.id, 'typing')
+        response_time = round((time.time() - start_time_ping) * 1000, 2)
+        speed_msg = ("\U0001F300 ᴡʜ ꜱᴘᴇᴇᴅ ᴛᴇꜱᴛ\n\n"
+                     f"\u23F1 ᴡʜ ᴘɪɴɢ ........... {response_time} ms\n"
+                     f"\U0001F6A6 ᴡʜ ꜱᴇʀᴠᴇʀ ..... online"
+                     if not bot_locked else "\U0001F528 maintenance")
+        bot.edit_message_text(speed_msg, message.chat.id, wait_msg.message_id)
+    except Exception as e:
+        logger.error(f"WA speed test error: {e}", exc_info=True)
+        bot.edit_message_text("\U0001F4A5 failed.", message.chat.id, wait_msg.message_id)
+
+def _send_wa_list(chat_id, owner_id):
+    """Show a user's WhatsApp bot list in a chat (works for inline callbacks too)."""
+    try:
+        wa_files_list = wa_user_files.get(owner_id, [])
+        if not wa_files_list:
+            bot.send_message(chat_id, "🗂️ ᴋᴏɪ ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛ ɴᴀʜɪ ʜᴀɪ ʏᴇᴛ 🚀", reply_markup=create_reply_keyboard_wa_menu(owner_id))
+            return
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        for file_name, file_type in sorted(wa_files_list):
+            is_running = is_wa_bot_running(owner_id, file_name)
+            status_icon = "🟢 running" if is_running else "⚪ stopped"
+            btn_text = f"{file_name} ({file_type}) - {status_icon}"
+            markup.add(types.InlineKeyboardButton(btn_text, callback_data=f'wafile_{owner_id}_{file_name}'))
+        bot.send_message(chat_id, f"📱 ᴍʏ ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛꜱ 👇", reply_markup=markup)
+    except Exception as e:
+        logger.error(f"WA list send err for {owner_id}: {e}", exc_info=True)
+
+def _logic_wa_my(message):
+    user_id = message.from_user.id
+    if is_user_banned(user_id):
+        bot.reply_to(message, "\u26D4 your account is restricted from this bot.")
+        return
+    wa_files_list = wa_user_files.get(user_id, [])
+    if not wa_files_list:
+        bot.reply_to(message, f"\U0001F5C2\uFE0F ᴋᴏɪ ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛ ɴᴀʜɪ ʜᴀɪ ʏᴇᴛ\nyᴀʜᴀ ᴘʜɪʟᴀ ꜱᴄʀɪᴘᴛ ʙʜᴇᴊᴏ \U0001F680", reply_markup=create_reply_keyboard_wa_menu(user_id))
+        return
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    for file_name, file_type in sorted(wa_files_list):
+        is_running = is_wa_bot_running(user_id, file_name)
+        status_icon = "\U0001F7E9 running" if is_running else "\u2B1C stopped"
+        btn_text = f"{file_name} ({file_type}) - {status_icon}"
+        markup.add(types.InlineKeyboardButton(btn_text, callback_data=f'wafile_{user_id}_{file_name}'))
+    bot.reply_to(message, f"\U0001F4F1 ᴍʏ ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛꜱ (\U0001F447)", reply_markup=markup, parse_mode='Markdown')
+
+def _logic_wa_back(message):
+    user_id = message.from_user.id
+    wa_sessions.pop(user_id, None)
+    bot.reply_to(message, "\U0001F4C2 ᴍᴀɪɴ ᴍᴇɴᴜ \U0001F447", reply_markup=create_reply_keyboard_main_menu(user_id))
+
+BUTTON_TEXT_TO_LOGIC_EXTRA = {
+    WA_BTN_MAIN: _logic_wa_main_menu,
+    WA_BTN_UPLOAD: _logic_wa_upload,
+    WA_BTN_MY: _logic_wa_my,
+    WA_BTN_DEP: _logic_wa_dependency,
+    WA_BTN_SPEED: _logic_wa_speed,
+    WA_BTN_BACK: _logic_wa_back,
+}
+
 BUTTON_TEXT_TO_LOGIC = {
     "📡 ᴜᴘᴅᴀᴛᴇꜱ": _logic_updates_channel,
     "⬆️ ᴅᴇᴘʟᴏʏ ʙᴏᴛ": _logic_upload_file,
@@ -4752,6 +5068,7 @@ BUTTON_TEXT_TO_LOGIC = {
     "⏹ ꜱᴛᴏᴘ ᴀʟʟ": _logic_stop_all,
     "🧹 ᴄʟᴇᴀɴᴜᴘ": _logic_owner_cleanup,
     "🛡️ ᴀᴅᴍɪɴ": _logic_admin_panel,
+    "🛡️ ᴀᴅᴍɪɴ ᴘᴀɴᴇʟ": _logic_admin_panel_menu,
     "📡 ᴄʜᴀɴɴᴇʟ": _logic_manage_mandatory_channels,
     "👥 ᴜꜱᴇʀꜱ": _logic_user_management,
     "🔧 ꜱᴇᴛᴛɪɴɢ": _logic_admin_settings,
@@ -4761,11 +5078,11 @@ BUTTON_TEXT_TO_LOGIC = {
     "🌐 ᴍʏ ᴡᴇʙ": _logic_my_websites
 }
 
-@bot.message_handler(func=lambda message: message.text in BUTTON_TEXT_TO_LOGIC)
+@bot.message_handler(func=lambda message: message.text in BUTTON_TEXT_TO_LOGIC or message.text in BUTTON_TEXT_TO_LOGIC_EXTRA)
 def handle_button_text(message):
     try:
         if message.from_user: _touch_user(message.from_user.id)
-        logic_func = BUTTON_TEXT_TO_LOGIC.get(message.text)
+        logic_func = BUTTON_TEXT_TO_LOGIC.get(message.text) or BUTTON_TEXT_TO_LOGIC_EXTRA.get(message.text)
         if logic_func: logic_func(message)
         else: logger.warning(f"Button text '{message.text}' matched but no logic func.")
     except Exception as e:
@@ -4831,6 +5148,9 @@ def handle_file_upload_doc(message):
     user_id = message.from_user.id
     chat_id = message.chat.id
     _touch_user(user_id)
+    if wa_sessions.pop(user_id, None):
+        _wa_handle_file_upload(message)
+        return
     if not deploy_sessions.pop(user_id, None):
         bot.reply_to(message,
             "\U0001F6AB "+_t("direct files not accepted")+"\n"
@@ -4920,6 +5240,489 @@ def handle_file_upload_doc(message):
     except Exception as e:
         logger.error(f"❌ General error handling file for {user_id}: {e}", exc_info=True)
         bot.reply_to(message, f"💥 unexpected error: {e}")
+
+# --- WhatsApp Document Handler (routed when user armed WA upload) ---
+def _wa_handle_file_upload(message):
+    user_id = message.from_user.id
+    chat_id = message.chat.id
+    try:
+        doc = message.document
+        logger.info(f"WA Doc from {user_id}: {doc.file_name} ({doc.mime_type}), Size: {doc.file_size}")
+        if is_user_banned(user_id):
+            bot.reply_to(message, "\u26D4 your account is restricted from this bot.")
+            return
+        if bot_locked and user_id not in admin_ids:
+            bot.reply_to(message, "\U0001F527 under maintenance \u2014 uploads paused.")
+            return
+        if user_id not in admin_ids and not _rate_ok(user_id):
+            bot.reply_to(message, "\U0001F4C9 too many uploads - slow down")
+            return
+        is_subscribed, not_joined = check_mandatory_subscription(user_id)
+        if not is_subscribed and user_id not in admin_ids:
+            subscription_message, markup = create_subscription_check_message(not_joined)
+            bot.reply_to(message, subscription_message, reply_markup=markup, parse_mode='Markdown')
+            return
+
+        file_name = doc.file_name
+        if not file_name: bot.reply_to(message, "\u2754 file name missing."); return
+        file_ext = os.path.splitext(file_name)[1].lower()
+        if file_ext not in ['.py', '.js', '.zip']:
+            bot.reply_to(message, "\U0001F6D1 nope! only `.py` · `.js` · `.zip` are allowed.")
+            return
+        max_file_size = 20 * 1024 * 1024
+        if doc.file_size > max_file_size:
+            bot.reply_to(message, f"\U0001F418 whoa! limit is {max_file_size // 1024 // 1024} mb."); return
+
+        file_limit = get_wa_user_file_limit(user_id)
+        current_files = get_wa_user_file_count(user_id)
+        if current_files >= file_limit:
+            limit_str = str(file_limit) if file_limit != float('inf') else "Unlimited"
+            bot.reply_to(message, f"\U0001F9BA {_t('slots full')} [{current_files}/{limit_str}] \u2014 {_t('remove one or buy subscription')} \u2192 {_t('contact')} {YOUR_USERNAME}")
+            return
+
+        try:
+            try:
+                bot.forward_message(OWNER_ID, chat_id, message.message_id)
+                bot.send_message(OWNER_ID, f"📱 WA file '{file_name}' from {message.from_user.first_name} (`{user_id}`)", parse_mode='Markdown')
+            except Exception as e: logger.error(f"Failed to forward WA uploaded file to OWNER_ID {OWNER_ID}: {e}")
+
+            download_wait_msg = bot.reply_to(message, f"\U00002601\uFE0F getting your file...")
+            file_info = bot.get_file(doc.file_id)
+            downloaded_file_content = bot.download_file(file_info.file_path)
+            bot.edit_message_text(f"\u2611\uFE0F got it! scanning `{file_name}`...", chat_id, download_wait_msg.message_id)
+            user_folder = get_wa_user_folder(user_id)
+
+            if file_ext == '.zip':
+                _wa_handle_zip(downloaded_file_content, file_name, message)
+            else:
+                file_path = os.path.join(user_folder, file_name)
+                with open(file_path, 'wb') as f: f.write(downloaded_file_content)
+                ai_report = build_ai_report(file_path, file_ext[1:], user_id, message.from_user.first_name, file_label="WhatsApp")
+                markup = types.InlineKeyboardMarkup()
+                markup.row(
+                    types.InlineKeyboardButton("\u2705 "+_t("approve"), callback_data=f"waapprove_file_{user_id}_{file_name}"),
+                    types.InlineKeyboardButton("\u2716\uFE0F "+_t("reject"), callback_data=f"wareject_file_{user_id}_{file_name}")
+                )
+                admin_alert = "\U0001F916 "+_t("whatsapp - single file")+"\n\n" + ai_report + ALERT_SUFFIX
+                for admin_id in admin_ids:
+                    try: bot.send_message(admin_id, admin_alert, reply_markup=markup)
+                    except Exception as e: logger.error(f"Failed to send WA AI report to admin {admin_id}: {e}")
+                bot.reply_to(message, f"🛡️ ꜱᴇᴄᴜʀɪᴛʏ ʀᴇᴠɪᴇᴡ ɪɴ ᴘʀᴏɢʀᴇꜱꜱ...\n🔔 ʏᴏᴜ'ʟʟ ʙᴇ ɴᴏᴛɪꜰɪᴇᴅ ᴜᴘᴏɴ ᴀᴘᴘʀᴏᴠᴀʟ.")
+        except telebot.apihelper.ApiTelegramException as e:
+            logger.error(f"TG API Error WA handling file for {user_id}: {e}", exc_info=True)
+            if "file is too big" in str(e).lower(): bot.reply_to(message, "🐘 telegram says too big (~20 mb cap).")
+            else: bot.reply_to(message, f"💥 telegram hiccup: {e}")
+        except Exception as e:
+            logger.error(f"❌ General WA error handling file for {user_id}: {e}", exc_info=True)
+            bot.reply_to(message, f"💥 unexpected error: {e}")
+    except Exception as e:
+        logger.error(f"❌ WA doc outer error for {user_id}: {e}", exc_info=True)
+        bot.reply_to(message, f"💥 wa error: {e}")
+
+def _wa_handle_zip(downloaded_file_content, file_name_zip, message):
+    user_id = message.from_user.id
+    temp_dir = None
+    try:
+        temp_dir = tempfile.mkdtemp(prefix=f"user_{user_id}_wa_zip_")
+        zip_path = os.path.join(temp_dir, file_name_zip)
+        with open(zip_path, 'wb') as new_file: new_file.write(downloaded_file_content)
+        ai_report = build_ai_report(zip_path, 'zip', user_id, message.from_user.first_name, file_label="WhatsApp-"+file_name_zip)
+        markup = types.InlineKeyboardMarkup()
+        markup.row(
+            types.InlineKeyboardButton("\u2705 "+_t("approve"), callback_data=f"waapprove_zip_{user_id}_{file_name_zip}"),
+            types.InlineKeyboardButton("\u2716\uFE0F "+_t("reject"), callback_data=f"wareject_zip_{user_id}_{file_name_zip}")
+        )
+        admin_alert = "\U0001F916 "+_t("whatsapp - zip archive")+"\n\n" + ai_report + ALERT_SUFFIX
+        for admin_id in admin_ids:
+            head = "\U0001F916 "+_t("whatsapp - zip archive")+"\n\n\U0001F4C1 "+_t("file")+": "+file_name_zip+"\n\U0001F464 "+_t("user id")+": "+str(user_id)
+            try: bot.send_message(admin_id, admin_alert[:2048], reply_markup=markup)
+            except Exception as e: logger.error(f"Failed to send WA zip AI report to admin {admin_id}: {e}")
+            try: bot.send_document(admin_id, downloaded_file_content, caption=head[:900], visible_file_name=file_name_zip)
+            except Exception as e: logger.error(f"Failed to send WA zip file to admin {admin_id}: {e}")
+        if user_id not in wa_pending_zip_files: wa_pending_zip_files[user_id] = {}
+        wa_pending_zip_files[user_id][file_name_zip] = downloaded_file_content
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        bot.reply_to(message, "🛡️ ꜱᴇᴄᴜʀɪᴛʏ ʀᴇᴠɪᴇᴡ ɪɴ ᴘʀᴏɢʀᴇꜱꜱ...\n🔔 ʏᴏᴜ'ʟʟ ʙᴇ ɴᴏᴛɪꜰɪᴇᴅ ᴜᴘᴏɴ ᴀᴘᴘʀᴏᴠᴀʟ.")
+        return
+    except zipfile.BadZipFile as e:
+        logger.error(f"Bad WA zip file from {user_id}: {e}")
+        bot.reply_to(message, f"\U0001F4A5 broken/corrupt zip. {e}")
+    except Exception as e:
+        logger.error(f"❌ Error processing WA zip for {user_id}: {e}", exc_info=True)
+    finally:
+        if temp_dir and os.path.exists(temp_dir):
+            try: shutil.rmtree(temp_dir, ignore_errors=True)
+            except Exception: pass
+
+def _wa_run_script(script_path, script_owner_id, user_folder, file_name, message_obj, attempt=1):
+    """Run a WhatsApp bot script. Mirrors run_script but tracks in wa_bot_scripts."""
+    max_attempts = 2
+    if attempt > max_attempts:
+        bot.reply_to(message_obj, f"\U0001F4A5 couldn't start '{file_name}'. check logs.")
+        return
+    script_key = f"{script_owner_id}_{file_name}"
+    ext = os.path.splitext(file_name)[1].lower()
+    logger.info(f"WA attempt {attempt} to run script: {script_path} (Key: {script_key})")
+    try:
+        if not os.path.exists(script_path):
+            bot.reply_to(message_obj, f"\u2754 '{file_name}' is gone \u2014 file not found!")
+            remove_wa_file2db(script_owner_id, file_name)
+            return
+        if attempt == 1:
+            check_command = [sys.executable, script_path] if ext == '.py' else ['node', script_path]
+            check_proc = None
+            try:
+                check_proc = subprocess.Popen(check_command, cwd=user_folder, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='ignore')
+                stdout, stderr = check_proc.communicate(timeout=5)
+                if check_proc.returncode != 0 and stderr:
+                    if ext == '.py':
+                        match_py = re.search(r"ModuleNotFoundError: No module named '(.+?)'", stderr)
+                        if match_py:
+                            module_name = match_py.group(1).strip().strip("'\"")
+                            success, _ = attempt_install_pip(module_name, message_obj)
+                            if success:
+                                bot.reply_to(message_obj, "\U0001F9E9 module added \u2014 starting again...")
+                                time.sleep(2)
+                                threading.Thread(target=_wa_run_script, args=(script_path, script_owner_id, user_folder, file_name, message_obj, attempt + 1)).start()
+                                return
+                            else: bot.reply_to(message_obj, "\U0001F4A5 couldn't add that module. stopped."); return
+                        else:
+                            bot.reply_to(message_obj, f"⚠️ script error in '{file_name}':\n```\n{stderr[:500]}\n```", parse_mode='Markdown')
+                            return
+                    else:
+                        if 'Cannot find module' in stderr:
+                            mod_match = re.search(r"Cannot find module '(.+?)'", stderr)
+                            if mod_match and attempt+1 <= max_attempts:
+                                bot.reply_to(message_obj, f"\U0001F4A5 WA js module '{mod_match.group(1)}' not found. use 🧩 ᴡʜ ᴅᴇᴘᴇɴᴅᴇɴᴄʏ."); return
+                        bot.reply_to(message_obj, f"⚠️ script error in '{file_name}':\n```\n{stderr[:500]}\n```", parse_mode='Markdown')
+                        return
+            except subprocess.TimeoutExpired:
+                if check_proc and check_proc.poll() is None: check_proc.kill(); check_proc.communicate()
+            except FileNotFoundError:
+                bot.reply_to(message_obj, f"🐍 python missing on host ({sys.executable})!")
+                return
+            except Exception as e:
+                logger.error(f"WA pre-check error for {script_key}: {e}", exc_info=True)
+                bot.reply_to(message_obj, f"💥 pre-check crashed ({e})")
+                return
+            finally:
+                if check_proc and check_proc.poll() is None: check_proc.kill(); check_proc.communicate()
+
+        log_file_path = os.path.join(user_folder, f"{os.path.splitext(file_name)[0]}.log")
+        log_file = None; process = None
+        try: log_file = open(log_file_path, 'w', encoding='utf-8', errors='ignore')
+        except Exception as e:
+            bot.reply_to(message_obj, f"\U0001F4DD couldn't write logs: {e}")
+            return
+        try:
+            command = [sys.executable, script_path] if ext == '.py' else ['node', script_path]
+            process = subprocess.Popen(command, cwd=user_folder, stdout=log_file, stderr=log_file,
+                                       stdin=subprocess.PIPE, encoding='utf-8', errors='ignore',
+                                       env=_clean_env_for(user_folder),
+                                       preexec_fn=_sandbox_preexec(user_folder) if os.name != 'nt' else None)
+            wa_bot_scripts[script_key] = {
+                'process': process, 'log_file': log_file, 'file_name': file_name,
+                'chat_id': message_obj.chat.id, 'script_owner_id': script_owner_id,
+                'start_time': datetime.now(), 'user_folder': user_folder,
+                'type': ext[1:], 'script_key': script_key, 'wa': True
+            }
+            bot.reply_to(message_obj, f"\u2705 ᴡʜ ʙᴏᴛ lɪᴠe! '{file_name}' \u00b7 pid {process.pid}")
+        except FileNotFoundError:
+            logger.error(f"Interpreter missing for WA {script_key}")
+            bot.reply_to(message_obj, f"🐍 python missing on host ({sys.executable})!")
+            if log_file and not log_file.closed: log_file.close()
+            if script_key in wa_bot_scripts: del wa_bot_scripts[script_key]
+        except Exception as e:
+            if log_file and not log_file.closed: log_file.close()
+            bot.reply_to(message_obj, f"\U0001F4A5 start failed '{file_name}': {e}")
+            if process and process.poll() is None:
+                kill_process_tree({'process': process, 'log_file': log_file, 'script_key': script_key})
+            if script_key in wa_bot_scripts: del wa_bot_scripts[script_key]
+    except Exception as e:
+        bot.reply_to(message_obj, f"\U0001F4A5 unexpected wa error on '{file_name}': {e}")
+        if script_key in wa_bot_scripts:
+            kill_process_tree(wa_bot_scripts[script_key]); del wa_bot_scripts[script_key]
+
+def _wa_process_zip(zip_path, user_id, user_folder, file_name_zip, message):
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            temp_dir = tempfile.mkdtemp(prefix=f"user_{user_id}_wa_zip_proc_")
+            for member in zip_ref.infolist():
+                member_path = os.path.abspath(os.path.join(temp_dir, member.filename))
+                if not member_path.startswith(os.path.abspath(temp_dir)):
+                    raise zipfile.BadZipFile(f"Zip has unsafe path: {member.filename}")
+            zip_ref.extractall(temp_dir)
+        items = os.listdir(temp_dir)
+        py_files = [f for f in items if f.endswith('.py')]
+        js_files = [f for f in items if f.endswith('.js')]
+        req_file = 'requirements.txt' if 'requirements.txt' in items else None
+        if req_file:
+            req_path = os.path.join(temp_dir, req_file)
+            bot.reply_to(message, f"\U0001F9E9 adding python packages from `{req_file}`...")
+            try:
+                result = subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', req_path], capture_output=True, text=True, check=True, encoding='utf-8', errors='ignore')
+                bot.reply_to(message, "\u2705 python packages ready.")
+            except Exception as e:
+                bot.reply_to(message, f"❌ failed to install deps: {str(e)[:400]}"); return
+        main_script_name = None; file_type = None
+        preferred_py = ['main.py', 'bot.py', 'app.py', 'index.py']; preferred_js = ['index.js', 'main.js', 'bot.js', 'app.js']
+        for p in preferred_py:
+            if p in py_files: main_script_name = p; file_type = 'py'; break
+        if not main_script_name:
+            for p in preferred_js:
+                if p in js_files: main_script_name = p; file_type = 'js'; break
+        if not main_script_name:
+            if py_files: main_script_name = py_files[0]; file_type = 'py'
+            elif js_files: main_script_name = js_files[0]; file_type = 'js'
+        if not main_script_name:
+            bot.reply_to(message, "\U0001F50D no .py/.js entry found inside the zip!"); return
+        for item_name in os.listdir(temp_dir):
+            src = os.path.join(temp_dir, item_name); dst = os.path.join(user_folder, item_name)
+            if os.path.isdir(dst): shutil.rmtree(dst)
+            elif os.path.exists(dst): os.remove(dst)
+            shutil.move(src, dst)
+        save_wa_file2db(user_id, main_script_name, file_type)
+        main_script_path = os.path.join(user_folder, main_script_name)
+        bot.reply_to(message, f"\U0001F5C2\uFE0F unpacked! launching `{main_script_name}`...", parse_mode='Markdown')
+        threading.Thread(target=_wa_run_script, args=(main_script_path, user_id, user_folder, main_script_name, message)).start()
+        try: shutil.rmtree(temp_dir, ignore_errors=True)
+        except Exception: pass
+    except Exception as e:
+        logger.error(f"WA zip process error: {e}", exc_info=True)
+        bot.reply_to(message, f"\U0001F4A5 zip problem: {e}")
+
+def _wa_start_script(script_path, script_owner_id, user_folder, file_name, message):
+    ext = os.path.splitext(file_name)[1].lower()
+    if ext in ('.py', '.js'):
+        threading.Thread(target=_wa_run_script, args=(script_path, script_owner_id, user_folder, file_name, message)).start()
+    else:
+        bot.reply_to(message, "\U0001F6D1 only `.py` · `.js` files can run.")
+
+# --- WhatsApp Admin Approval Callbacks ---
+def process_wa_approve_file(call):
+    data_parts = call.data.split('_')
+    if len(data_parts) < 4:
+        bot.answer_callback_query(call.id, "❌ Invalid data.", show_alert=True); return
+    user_id = int(data_parts[2]); file_name = '_'.join(data_parts[3:])
+    user_folder = get_wa_user_folder(user_id); file_path = os.path.join(user_folder, file_name)
+    if not os.path.exists(file_path):
+        bot.answer_callback_query(call.id, "❌ File not found.", show_alert=True); return
+    file_ext = os.path.splitext(file_name)[1].lower()
+    save_wa_file2db(user_id, file_name, file_ext[1:])
+    threading.Thread(target=_wa_run_script, args=(file_path, user_id, user_folder, file_name, call.message)).start()
+    bot.answer_callback_query(call.id, "✅ File approved!")
+    bot.edit_message_text(f"✅ WA file `{file_name}` approved for user `{user_id}`", call.message.chat.id, call.message.message_id)
+    try: bot.send_message(user_id, f"✅ Your WA file `{file_name}` has been approved and started.")
+    except Exception as e: logger.error(f"Failed to notify user {user_id}: {e}")
+
+def process_wa_reject_file(call):
+    data_parts = call.data.split('_')
+    if len(data_parts) < 4:
+        bot.answer_callback_query(call.id, "❌ Invalid data.", show_alert=True); return
+    user_id = int(data_parts[2]); file_name = '_'.join(data_parts[3:])
+    user_folder = get_wa_user_folder(user_id); file_path = os.path.join(user_folder, file_name)
+    if os.path.exists(file_path):
+        try: os.remove(file_path)
+        except Exception as e: logger.error(f"Error deleting rejected WA file: {e}")
+    bot.answer_callback_query(call.id, "❌ File rejected!")
+    bot.edit_message_text(f"❌ WA file `{file_name}` rejected for user `{user_id}`", call.message.chat.id, call.message.message_id)
+    try: bot.send_message(user_id, f"❌ Your WA file `{file_name}` has been rejected for security reasons.")
+    except Exception as e: logger.error(f"Failed to notify user {user_id}: {e}")
+
+def process_wa_approve_zip(call):
+    data_parts = call.data.split('_')
+    if len(data_parts) < 4:
+        bot.answer_callback_query(call.id, "❌ Invalid data.", show_alert=True); return
+    user_id = int(data_parts[2]); file_name = '_'.join(data_parts[3:])
+    if user_id in wa_pending_zip_files and file_name in wa_pending_zip_files[user_id]:
+        file_content = wa_pending_zip_files[user_id][file_name]
+        user_folder = get_wa_user_folder(user_id)
+        temp_dir = None
+        try:
+            temp_dir = tempfile.mkdtemp(prefix=f"user_{user_id}_wa_zip_approve_")
+            zip_path = os.path.join(temp_dir, file_name)
+            with open(zip_path, 'wb') as f: f.write(file_content)
+            _wa_process_zip(zip_path, user_id, user_folder, file_name, call.message)
+            if user_id in wa_pending_zip_files and file_name in wa_pending_zip_files[user_id]:
+                del wa_pending_zip_files[user_id][file_name]
+                if not wa_pending_zip_files[user_id]: del wa_pending_zip_files[user_id]
+            bot.answer_callback_query(call.id, "✅ Archive approved!")
+            bot.edit_message_text(f"✅ WA archive `{file_name}` approved for user `{user_id}`", call.message.chat.id, call.message.message_id)
+            try: bot.send_message(user_id, f"✅ Your WA archive `{file_name}` has been approved and processed.")
+            except Exception as e: logger.error(f"Failed to notify user {user_id}: {e}")
+        except Exception as e:
+            logger.error(f"WA approve zip error: {e}", exc_info=True)
+            bot.answer_callback_query(call.id, "❌ Error processing archive.", show_alert=True)
+        finally:
+            if temp_dir and os.path.exists(temp_dir):
+                try: shutil.rmtree(temp_dir)
+                except Exception: pass
+    else:
+        bot.answer_callback_query(call.id, "❌ File content not found. Ask user to re-upload.", show_alert=True)
+
+def process_wa_reject_zip(call):
+    data_parts = call.data.split('_')
+    if len(data_parts) < 4:
+        bot.answer_callback_query(call.id, "❌ Invalid data.", show_alert=True); return
+    user_id = int(data_parts[2]); file_name = '_'.join(data_parts[3:])
+    if user_id in wa_pending_zip_files and file_name in wa_pending_zip_files[user_id]:
+        del wa_pending_zip_files[user_id][file_name]
+        if not wa_pending_zip_files[user_id]: del wa_pending_zip_files[user_id]
+    bot.answer_callback_query(call.id, "❌ Archive rejected!")
+    bot.edit_message_text(f"❌ WA archive `{file_name}` rejected for user `{user_id}`", call.message.chat.id, call.message.message_id)
+    try: bot.send_message(user_id, f"❌ Your WA archive `{file_name}` has been rejected for security reasons.")
+    except Exception as e: logger.error(f"Failed to notify user {user_id}: {e}")
+
+# --- WhatsApp Bot Management Callbacks ---
+def wa_file_control_callback(call):
+    try:
+        _, script_owner_id_str, file_name = call.data.split('_', 2)
+        script_owner_id = int(script_owner_id_str)
+        requesting_user_id = call.from_user.id
+        if not (requesting_user_id == script_owner_id or requesting_user_id in admin_ids):
+            bot.answer_callback_query(call.id, "⚠️ You can only manage your own WA bots.", show_alert=True)
+            return
+        user_folder = get_wa_user_folder(script_owner_id)
+        file_path = os.path.join(user_folder, file_name)
+        wa_files_list = wa_user_files.get(script_owner_id, [])
+        if not any(f[0] == file_name for f in wa_files_list):
+            bot.answer_callback_query(call.id, "⚠️ WA file not found.", show_alert=True)
+            _logic_wa_my(call.message)
+            return
+        is_running = is_wa_bot_running(script_owner_id, file_name)
+        status_text = '🟢 running' if is_running else '🔴 stopped'
+        try:
+            bot.edit_message_text(
+                f"⚙️ WA Controls: `{file_name}` of User `{script_owner_id}`\nStatus: {status_text}",
+                call.message.chat.id, call.message.message_id,
+                reply_markup=create_wa_control_buttons(script_owner_id, file_name, is_running),
+                parse_mode='Markdown')
+        except telebot.apihelper.ApiTelegramException as e:
+            if "message is not modified" in str(e): logger.warning(f"Msg not modified (wa controls for {file_name})")
+            else: raise
+        bot.answer_callback_query(call.id)
+    except (ValueError, IndexError) as ve:
+        logger.error(f"Error parsing wa file control callback: {ve}. Data: '{call.data}'")
+        bot.answer_callback_query(call.id, "Error: Invalid action data.", show_alert=True)
+    except Exception as e:
+        logger.error(f"wa_file_control_callback error for '{call.data}': {e}", exc_info=True)
+        bot.answer_callback_query(call.id, "An error occurred.", show_alert=True)
+
+def _wa_parse_owner_fname(call):
+    """Parse '{prefix}_{owner}_{file_name...}' -> (owner, file_name)."""
+    parts = call.data.split('_', 2)
+    return int(parts[1]), parts[2]
+
+def wa_start_callback(call):
+    try:
+        script_owner_id, file_name = _wa_parse_owner_fname(call)
+        if call.from_user.id != script_owner_id and call.from_user.id not in admin_ids:
+            bot.answer_callback_query(call.id, "⚠️ Permission denied.", show_alert=True); return
+        folder = get_wa_user_folder(script_owner_id)
+        path = os.path.join(folder, file_name)
+        if not os.path.exists(path):
+            bot.answer_callback_query(call.id, "❌ File not found.", show_alert=True); return
+        if is_wa_bot_running(script_owner_id, file_name):
+            bot.answer_callback_query(call.id, "⚠️ already running.", show_alert=True); return
+        bot.answer_callback_query(call.id, "▶️ starting...")
+        threading.Thread(target=_wa_run_script, args=(path, script_owner_id, folder, file_name, call.message)).start()
+    except Exception as e:
+        logger.error(f"wa_start error '{call.data}': {e}", exc_info=True)
+        bot.answer_callback_query(call.id, "❌ failed", show_alert=True)
+
+def wa_stop_callback(call):
+    try:
+        script_owner_id, file_name = _wa_parse_owner_fname(call)
+        if call.from_user.id != script_owner_id and call.from_user.id not in admin_ids:
+            bot.answer_callback_query(call.id, "⚠️ Permission denied.", show_alert=True); return
+        key = f"{script_owner_id}_{file_name}"
+        info = wa_bot_scripts.get(key)
+        if not info or not info.get('process'):
+            bot.answer_callback_query(call.id, "⚠️ not running", show_alert=True); return
+        kill_process_tree(info)
+        wa_bot_scripts.pop(key, None)
+        bot.answer_callback_query(call.id, "⏹ stopped")
+    except Exception as e:
+        logger.error(f"wa_stop error '{call.data}': {e}", exc_info=True)
+        bot.answer_callback_query(call.id, "❌ failed", show_alert=True)
+
+def wa_restart_callback(call):
+    try:
+        script_owner_id, file_name = _wa_parse_owner_fname(call)
+        if call.from_user.id != script_owner_id and call.from_user.id not in admin_ids:
+            bot.answer_callback_query(call.id, "⚠️ Permission denied.", show_alert=True); return
+        key = f"{script_owner_id}_{file_name}"
+        info = wa_bot_scripts.get(key)
+        if info and info.get('process'):
+            try: kill_process_tree(info); wa_bot_scripts.pop(key, None)
+            except Exception as e: logger.error(f"WA restart kill error {key}: {e}", exc_info=True)
+        folder = get_wa_user_folder(script_owner_id)
+        path = os.path.join(folder, file_name)
+        if not os.path.exists(path):
+            bot.answer_callback_query(call.id, "❌ File not found.", show_alert=True); return
+        bot.answer_callback_query(call.id, "♻️ restarting...")
+        threading.Thread(target=_wa_run_script, args=(path, script_owner_id, folder, file_name, call.message)).start()
+    except Exception as e:
+        logger.error(f"wa_restart error '{call.data}': {e}", exc_info=True)
+        bot.answer_callback_query(call.id, "❌ failed", show_alert=True)
+
+def wa_delete_callback(call):
+    try:
+        script_owner_id, file_name = _wa_parse_owner_fname(call)
+        if call.from_user.id != script_owner_id and call.from_user.id not in admin_ids:
+            bot.answer_callback_query(call.id, "⚠️ Permission denied.", show_alert=True); return
+        key = f"{script_owner_id}_{file_name}"
+        info = wa_bot_scripts.get(key)
+        if info and info.get('process'):
+            try: kill_process_tree(info); wa_bot_scripts.pop(key, None)
+            except Exception as e: logger.error(f"WA delete kill error {key}: {e}", exc_info=True)
+        folder = get_wa_user_folder(script_owner_id)
+        base = os.path.splitext(file_name)[0]
+        for cand in [os.path.join(folder, file_name), os.path.join(folder, base + '.log')]:
+            if os.path.exists(cand):
+                try: os.remove(cand)
+                except Exception: pass
+        remove_wa_file2db(script_owner_id, file_name)
+        bot.answer_callback_query(call.id, "🗑 deleted")
+        try: bot.edit_message_text(f"🗑 WA bot `{file_name}` deleted", call.message.chat.id, call.message.message_id)
+        except Exception: pass
+        try:
+            _logic_wa_my(call.message)
+        except Exception: pass
+    except Exception as e:
+        logger.error(f"wa_delete error '{call.data}': {e}", exc_info=True)
+        bot.answer_callback_query(call.id, "❌ failed", show_alert=True)
+
+def wa_logs_callback(call):
+    try:
+        script_owner_id, file_name = _wa_parse_owner_fname(call)
+        folder = get_wa_user_folder(script_owner_id)
+        base = os.path.splitext(file_name)[0]
+        log_path = os.path.join(folder, base + '.log')
+        if os.path.exists(log_path):
+            with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+            if len(content) > 3500: content = content[-3500:]
+            bot.answer_callback_query(call.id)
+            msg = f"📝 WA logs `{file_name}`\n```\n{content}\n```"
+            if len(msg) > 4000:
+                try: bot.send_document(call.message.chat.id, open(log_path, 'rb'))
+                except Exception: bot.send_message(call.message.chat.id, f"📝 WA logs `{file_name}` (truncated)\n{content[-1200:]}")
+            else:
+                bot.send_message(call.message.chat.id, msg, parse_mode='Markdown')
+        else:
+            bot.answer_callback_query(call.id, "📭 no logs yet", show_alert=True)
+    except Exception as e:
+        logger.error(f"wa_logs error '{call.data}': {e}", exc_info=True)
+        bot.answer_callback_query(call.id, "❌ can't read logs", show_alert=True)
+
+def wa_back_callback(call):
+    user_id = call.from_user.id
+    try:
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception: pass
+    bot.send_message(call.message.chat.id, "\U0001F4F1 ᴡʜᴀᴛꜱᴀᴘᴘ ᴍᴇɴᴜ \U0001F447", reply_markup=create_reply_keyboard_wa_menu(user_id))
+    bot.answer_callback_query(call.id)
 
 # --- Callback Query Handlers (for Inline Buttons) ---
 @bot.callback_query_handler(func=lambda call: True) 
@@ -5012,6 +5815,17 @@ def handle_callbacks(call):
         elif data.startswith('reject_file_'): admin_required_callback(call, process_reject_file)
         elif data.startswith('approve_zip_'): admin_required_callback(call, process_approve_zip)
         elif data.startswith('reject_zip_'): admin_required_callback(call, process_reject_zip)
+        elif data.startswith('waapprove_file_'): admin_required_callback(call, process_wa_approve_file)
+        elif data.startswith('wareject_file_'): admin_required_callback(call, process_wa_reject_file)
+        elif data.startswith('waapprove_zip_'): admin_required_callback(call, process_wa_approve_zip)
+        elif data.startswith('wareject_zip_'): admin_required_callback(call, process_wa_reject_zip)
+        elif data.startswith('wafile_'): wa_file_control_callback(call)
+        elif data.startswith('wastart_'): wa_start_callback(call)
+        elif data.startswith('wastop_'): wa_stop_callback(call)
+        elif data.startswith('warestart_'): wa_restart_callback(call)
+        elif data.startswith('wadelete_'): wa_delete_callback(call)
+        elif data.startswith('walogs_'): wa_logs_callback(call)
+        elif data == 'wa_back': wa_back_callback(call)
         elif data.startswith('gapprove_'): admin_required_callback(call, process_approve_gh)
         elif data.startswith('greject_'): admin_required_callback(call, process_reject_gh)
         elif data == 'web_host':
@@ -5213,7 +6027,7 @@ def check_files_callback(call):
         bot.answer_callback_query(call.id, "⚠️ No files uploaded.", show_alert=True)
         try:
             markup = types.InlineKeyboardMarkup()
-            markup.add(types.InlineKeyboardButton("🔙 Back to Main", callback_data='back_to_main'))
+            markup.add(types.InlineKeyboardButton("🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ", callback_data='back_to_main'))
             bot.edit_message_text("\U0001F5C2\uFE0F "+_t("no files yet")+"\n"+_t("send your first script to get started")+" \U0001F680", chat_id, call.message.message_id, reply_markup=markup)
         except Exception as e: logger.error(f"Error editing msg for empty file list: {e}")
         return
@@ -5225,7 +6039,7 @@ def check_files_callback(call):
         btn_text = f"{file_name} ({file_type}) - {status_icon}"
         # Callback includes user_id as script_owner_id
         markup.add(types.InlineKeyboardButton(btn_text, callback_data=f'file_{user_id}_{file_name}'))
-    markup.add(types.InlineKeyboardButton("🔙 Back to Main", callback_data='back_to_main'))
+    markup.add(types.InlineKeyboardButton("🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ", callback_data='back_to_main'))
     try:
         bot.edit_message_text(f"\U0001F5C2\uFE0F {_t('my files')}\n{_t('tap a file to manage')} \U0001F447", chat_id, call.message.message_id, reply_markup=markup, parse_mode='Markdown')
     except telebot.apihelper.ApiTelegramException as e:
@@ -5705,8 +6519,8 @@ def process_broadcast_message(message):
 
     target_count = len(active_users)
     markup = types.InlineKeyboardMarkup()
-    markup.row(types.InlineKeyboardButton("\u2705 push it", callback_data=f"confirm_broadcast_{message.message_id}"),
-               types.InlineKeyboardButton("\u2716\uFE0F cancel", callback_data="cancel_broadcast"))
+    markup.row(types.InlineKeyboardButton("\u2705 ᴘᴜꜱʜ ɪᴛ", callback_data=f"confirm_broadcast_{message.message_id}"),
+               types.InlineKeyboardButton("\u2716\uFE0F ᴄᴀɴᴄᴇʟ", callback_data="cancel_broadcast"))
 
     preview_text = broadcast_content[:1000].strip() if broadcast_content else "(Media message)"
     bot.reply_to(message, f"\U0001F4EC push this out?\n\n```\n{preview_text}\n```\n" 
@@ -6167,16 +6981,16 @@ def display_users_list(chat_id, message_id, users_list, page, total_pages, chunk
     if total_pages > 1:
         page_buttons = []
         if page > 0:
-            page_buttons.append(types.InlineKeyboardButton("⬅️ Previous", callback_data=f"users_page_{page-1}"))
+            page_buttons.append(types.InlineKeyboardButton("⬅️ ᴘʀᴇᴠɪᴏᴜꜱ", callback_data=f"users_page_{page-1}"))
         
         page_buttons.append(types.InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="noop"))
         
         if page < total_pages - 1:
-            page_buttons.append(types.InlineKeyboardButton("Next ➡️", callback_data=f"users_page_{page+1}"))
+            page_buttons.append(types.InlineKeyboardButton("ɴᴇxᴛ ➡️", callback_data=f"users_page_{page+1}"))
         
         markup.row(*page_buttons)
     
-    markup.row(types.InlineKeyboardButton("🔙 Back to User Management", callback_data='user_management'))
+    markup.row(types.InlineKeyboardButton("🔙 ʙᴀᴄᴋ ᴛᴏ ᴜꜱᴇʀ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ", callback_data='user_management'))
     
     try:
         bot.edit_message_text(message_text, chat_id, message_id, reply_markup=markup, parse_mode='Markdown')
@@ -6516,7 +7330,7 @@ def remove_mandatory_channel_callback(call):
         button_text = f"🗑️ {channel_name}"
         markup.add(types.InlineKeyboardButton(button_text, callback_data=f'remove_channel_{channel_id}'))
     
-    markup.add(types.InlineKeyboardButton("🔙 Back", callback_data='manage_mandatory_channels'))
+    markup.add(types.InlineKeyboardButton("🔙 ʙᴀᴄᴋ", callback_data='manage_mandatory_channels'))
     
     try:
         bot.edit_message_text("\U0001F5D1 pick a channel to remove:",
@@ -6803,10 +7617,13 @@ def process_reject_gh(call):
 def cleanup():
     logger.warning("Shutdown. Cleaning up processes...")
     script_keys_to_stop = list(bot_scripts.keys()) 
-    if not script_keys_to_stop: logger.info("No scripts running. Exiting."); return
+    wa_keys_to_stop = list(wa_bot_scripts.keys())
+    if not script_keys_to_stop and not wa_keys_to_stop: logger.info("No scripts running. Exiting."); return
+    script_keys_to_stop.extend(wa_keys_to_stop)
     logger.info(f"Stopping {len(script_keys_to_stop)} scripts...")
     for key in script_keys_to_stop:
         if key in bot_scripts: logger.info(f"Stopping: {key}"); kill_process_tree(bot_scripts[key])
+        elif key in wa_bot_scripts: logger.info(f"Stopping WA: {key}"); kill_process_tree(wa_bot_scripts[key])
         else: logger.info(f"Script {key} already removed.")
     logger.warning("Cleanup finished.")
 atexit.register(cleanup)
