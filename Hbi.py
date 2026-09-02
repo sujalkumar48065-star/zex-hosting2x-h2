@@ -286,32 +286,30 @@ logger = logging.getLogger(__name__)
 
 # --- Command Button Layouts ---
 COMMAND_BUTTONS_LAYOUT_USER_SPEC = [
-    ["Deploy bot", "My bot"],
-    ["Web host", "My web"],
-    ["WhatsApp bot"],
-    ["Install", "Speed"],
-    ["Stats", "Guide"],
-    ["Update"],
-    ["Developer"]
+    ["⬆️ ᴅᴇᴘʟᴏʏ ʙᴏᴛ", "🗂️ ᴍʏ ʙᴏᴛꜱ"],
+    ["🌐 ᴡᴇʙ ʜᴏꜱᴛ", "🌐 ᴍʏ ᴡᴇʙ"],
+    ["🧩 ɪɴꜱᴛᴀʟʟ", "🌀 ꜱᴘᴇᴇᴅ"],
+    ["📱 ᴡʜᴀᴛꜱᴀᴘᴘ ꜱᴇᴛᴜᴘ", "❔ ɢᴜɪᴅᴇ"],
+    ["📊 ꜱᴛᴀᴛꜱ", "📡 ᴜᴘᴅᴀᴛᴇꜱ"],
+    ["💬 ᴅᴇᴠᴇʟᴏᴘᴇʀ"]
 ]
 
 ADMIN_COMMAND_BUTTONS_LAYOUT_USER_SPEC = [
-    ["Deploy bot", "My bot"],
-    ["Web host", "My web"],
-    ["WhatsApp bot"],
-    ["Install", "Speed"],
-    ["Stats", "Guide"],
-    ["Update"],
-    ["Admin panel", "Developer"]
+    ["⬆️ ᴅᴇᴘʟᴏʏ ʙᴏᴛ", "🗂️ ᴍʏ ʙᴏᴛꜱ"],
+    ["🌐 ᴡᴇʙ ʜᴏꜱᴛ", "🌐 ᴍʏ ᴡᴇʙ"],
+    ["🧩 ɪɴꜱᴛᴀʟʟ", "🌀 ꜱᴘᴇᴇᴅ"],
+    ["📱 ᴡʜᴀᴛꜱᴀᴘᴘ ꜱᴇᴛᴜᴘ", "❔ ɢᴜɪᴅᴇ"],
+    ["📊 ꜱᴛᴀᴛꜱ", "📡 ᴜᴘᴅᴀᴛᴇꜱ"],
+    ["🛡️ ᴀᴅᴍɪɴ ᴘᴀɴᴇʟ", "💬 ᴅᴇᴠᴇʟᴏᴘᴇʀ"]
 ]
 
 ADMIN_COMMAND_BUTTONS_LAYOUT_PANEL = [
-    ["Subs", "Broadcast"],
-    ["Lock", "Run all"],
-    ["Users", "Setting"],
-    ["Channel", "Stop all"],
-    ["Cleanup", "Admin"],
-    ["Back to Main"]
+    ["💳 ꜱᴜʙꜱ", "📮 ʙʀᴏᴀᴅᴄᴀꜱᴛ"],
+    ["⛔ ʟᴏᴄᴋ", "♻️ ʀᴜɴ ᴀʟʟ"],
+    ["👥 ᴜꜱᴇʀꜱ", "🔧 ꜱᴇᴛᴛɪɴɢ"],
+    ["📡 ᴄʜᴀɴɴᴇʟ", "⏹ ꜱᴛᴏᴘ ᴀʟʟ"],
+    ["🧹 ᴄʟᴇᴀɴᴜᴘ", "🛡️ ᴀᴅᴍɪɴ"],
+    ["🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"]
 ]
 
 # --- Database Setup ---
@@ -2725,7 +2723,7 @@ def create_reply_keyboard_main_menu(user_id):
 
 def create_reply_keyboard_admin_panel(user_id):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    layout_to_use = ADMIN_COMMAND_BUTTONS_LAYOUT_PANEL if user_id in admin_ids else [["Back to Main"]]
+    layout_to_use = ADMIN_COMMAND_BUTTONS_LAYOUT_PANEL if user_id in admin_ids else [["🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"]]
     for row_buttons_text in layout_to_use:
         markup.add(*[types.KeyboardButton(text) for text in row_buttons_text])
     return markup
@@ -2733,9 +2731,9 @@ def create_reply_keyboard_admin_panel(user_id):
 def create_reply_keyboard_wa_menu(user_id):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     layout = [
-        ["Upload file", "My WhatsApp"],
-        ["Dependency", "Speed"],
-        ["Back to Main"]
+        ["⬆️ ᴡʜ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ", "📱 ᴍʏ ᴡʜᴀᴛꜱᴀᴘᴘ"],
+        ["🧩 ᴡʜ ᴅᴇᴘᴇɴᴅᴇɴᴄʏ", "🌀 ᴡʜ ꜱᴘᴇᴇᴅ"],
+        ["🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"]
     ]
     for row_buttons_text in layout:
         markup.add(*[types.KeyboardButton(text) for text in row_buttons_text])
@@ -4929,12 +4927,12 @@ def command_version(message): _logic_owner_version(message)
 def command_restart(message): _logic_user_restart(message)
 
 # ==================== WHATSAPP HOSTING ====================
-WA_BTN_MAIN = "WhatsApp bot"
-WA_BTN_UPLOAD = "Upload file"
-WA_BTN_MY = "My WhatsApp"
-WA_BTN_DEP = "Dependency"
-WA_BTN_SPEED = "Speed"
-WA_BTN_BACK = "Back to Main"
+WA_BTN_MAIN = "📱 ᴡʜᴀᴛꜱᴀᴘᴘ ꜱᴇᴛᴜᴘ"
+WA_BTN_UPLOAD = "⬆️ ᴡʜ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ"
+WA_BTN_MY = "📱 ᴍʏ ᴡʜᴀᴛꜱᴀᴘᴘ"
+WA_BTN_DEP = "🧩 ᴡʜ ᴅᴇᴘᴇɴᴅᴇɴᴄʏ"
+WA_BTN_SPEED = "🌀 ᴡʜ ꜱᴘᴇᴇᴅ"
+WA_BTN_BACK = "🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"
 
 def _logic_wa_main_menu(message):
     user_id = message.from_user.id
@@ -5083,27 +5081,27 @@ BUTTON_TEXT_TO_LOGIC_EXTRA = {
 }
 
 BUTTON_TEXT_TO_LOGIC = {
-    "Update": _logic_updates_channel,
-    "Deploy bot": _logic_upload_file,
-    "My bot": _logic_check_files,
-    "Speed": _logic_bot_speed,
-    "Developer": _logic_contact_owner,
-    "Stats": _logic_statistics,
-    "Subs": _logic_subscriptions_panel,
-    "Broadcast": _logic_broadcast_init,
-    "Lock": _logic_toggle_lock_bot,
-    "Run all": _logic_run_all_scripts,
-    "Stop all": _logic_stop_all,
-    "Cleanup": _logic_owner_cleanup,
-    "Admin": _logic_admin_panel,
-    "Admin panel": _logic_admin_panel_menu,
-    "Channel": _logic_manage_mandatory_channels,
-    "Users": _logic_user_management,
-    "Setting": _logic_admin_settings,
-    "Install": _logic_manual_install,
-    "Guide": _logic_help,
-    "Web host": _logic_web_host,
-    "My web": _logic_my_websites
+    "📡 ᴜᴘᴅᴀᴛᴇꜱ": _logic_updates_channel,
+    "⬆️ ᴅᴇᴘʟᴏʏ ʙᴏᴛ": _logic_upload_file,
+    "🗂️ ᴍʏ ʙᴏᴛꜱ": _logic_check_files,
+    "🌀 ꜱᴘᴇᴇᴅ": _logic_bot_speed,
+    "💬 ᴅᴇᴠᴇʟᴏᴘᴇʀ": _logic_contact_owner,
+    "📊 ꜱᴛᴀᴛꜱ": _logic_statistics,
+    "💳 ꜱᴜʙꜱ": _logic_subscriptions_panel,
+    "📮 ʙʀᴏᴀᴅᴄᴀꜱᴛ": _logic_broadcast_init,
+    "⛔ ʟᴏᴄᴋ": _logic_toggle_lock_bot,
+    "♻️ ʀᴜɴ ᴀʟʟ": _logic_run_all_scripts,
+    "⏹ ꜱᴛᴏᴘ ᴀʟʟ": _logic_stop_all,
+    "🧹 ᴄʟᴇᴀɴᴜᴘ": _logic_owner_cleanup,
+    "🛡️ ᴀᴅᴍɪɴ": _logic_admin_panel,
+    "🛡️ ᴀᴅᴍɪɴ ᴘᴀɴᴇʟ": _logic_admin_panel_menu,
+    "📡 ᴄʜᴀɴɴᴇʟ": _logic_manage_mandatory_channels,
+    "👥 ᴜꜱᴇʀꜱ": _logic_user_management,
+    "🔧 ꜱᴇᴛᴛɪɴɢ": _logic_admin_settings,
+    "🧩 ɪɴꜱᴛᴀʟʟ": _logic_manual_install,
+    "❔ ɢᴜɪᴅᴇ": _logic_help,
+    "🌐 ᴡᴇʙ ʜᴏꜱᴛ": _logic_web_host,
+    "🌐 ᴍʏ ᴡᴇʙ": _logic_my_websites
 }
 
 @bot.message_handler(func=lambda message: message.text in BUTTON_TEXT_TO_LOGIC or message.text in BUTTON_TEXT_TO_LOGIC_EXTRA)
