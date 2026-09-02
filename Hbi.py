@@ -346,6 +346,8 @@ def init_db():
                       status TEXT,
                       log TEXT,
                       install_date TEXT)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS h2_settings
+                     (app_key TEXT PRIMARY KEY, app_value TEXT)''')
         
         c.execute('INSERT OR IGNORE INTO admins (user_id, added_by, added_date) VALUES (?, ?, ?)', 
                   (OWNER_ID, OWNER_ID, datetime.now().isoformat()))
@@ -404,6 +406,15 @@ def load_data():
                 'username': channel_username,
                 'name': channel_name
             }
+
+        # Restore persisted bot lock state (survives deploys/restarts)
+        global bot_locked
+        try:
+            c.execute("SELECT app_value FROM h2_settings WHERE app_key='bot_locked'")
+            _row = c.fetchone()
+            bot_locked = bool(_row and _row[0] == '1')
+        except Exception as e:
+            logger.warning(f"bot_locked meta restore ignored: {e}")
 
         conn.close()
         logger.info(f"Data loaded: {len(active_users)} users, {len(user_subscriptions)} subscriptions, {len(admin_ids)} admins, {len(banned_users)} banned users, {len(user_limits)} custom limits, {len(mandatory_channels)} mandatory channels.")
@@ -3656,12 +3667,26 @@ def _logic_broadcast_init(message):
     msg = bot.reply_to(message, "\U0001F4EE type your announcement now.\n/cancel to quit.")
     bot.register_next_step_handler(msg, process_broadcast_message)
 
+def _persist_bot_locked():
+    """Save the bot lock state so it survives deploys/restarts."""
+    try:
+        with DB_LOCK:
+            conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
+            c = conn.cursor()
+            c.execute("INSERT OR REPLACE INTO h2_settings (app_key, app_value) VALUES ('bot_locked', ?)",
+                      ('1' if bot_locked else '0',))
+            conn.commit()
+            conn.close()
+    except Exception as e:
+        logger.error(f"persist bot_locked err: {e}", exc_info=True)
+
 def _logic_toggle_lock_bot(message):
     if message.from_user.id not in admin_ids:
         bot.reply_to(message, "\U0001F512 staff only area.")
         return
     global bot_locked
     bot_locked = not bot_locked
+    _persist_bot_locked()
     status = "locked" if bot_locked else "unlocked"
     logger.warning(f"Bot {status} by Admin {message.from_user.id} via command/button.")
     bot.reply_to(message, "\u26D4 gates closed." if bot_locked else "\U0001F513 gates open.")
@@ -6485,6 +6510,7 @@ def stats_callback(call): # Called by user and admin
 
 def lock_bot_callback(call):
     global bot_locked; bot_locked = True
+    _persist_bot_locked()
     logger.warning(f"Bot locked by Admin {call.from_user.id}")
     bot.answer_callback_query(call.id, "🔒 Bot locked.")
     try: bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=create_main_menu_inline(call.from_user.id))
@@ -6492,6 +6518,7 @@ def lock_bot_callback(call):
 
 def unlock_bot_callback(call):
     global bot_locked; bot_locked = False
+    _persist_bot_locked()
     logger.warning(f"Bot unlocked by Admin {call.from_user.id}")
     bot.answer_callback_query(call.id, "🔓 Bot unlocked.")
     try: bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=create_main_menu_inline(call.from_user.id))
