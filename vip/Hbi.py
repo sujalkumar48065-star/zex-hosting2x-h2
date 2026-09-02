@@ -3704,7 +3704,7 @@ def _logic_admin_panel_menu(message):
     if user_id not in admin_ids:
         bot.reply_to(message, "\U0001F512 staff only area.")
         return
-    bot.reply_to(message, "\U0001F451 ᴀᴅᴍɪɴ ᴘᴀɴᴇʟ\nꜱᴀʀᴇ ᴀᴅᴍɪɴ ᴄᴏɴᴛʀᴏʟꜱ ʏᴀʜᴀ ᴘᴀʀ \U0001F447", 
+    bot.reply_to(message, "\U0001F451 ᴀᴅᴍɪɴ ᴘᴀɴᴇʟ\n👇 ᴀʟʟ ᴀᴅᴍɪɴ ᴄᴏɴᴛʀᴏʟꜱ ʜᴇʀᴇ", 
                  reply_markup=create_reply_keyboard_admin_panel(user_id))
 
 def _logic_user_management(message):
@@ -4944,15 +4944,7 @@ def _logic_wa_main_menu(message):
         subscription_message, markup = create_subscription_check_message(not_joined)
         bot.reply_to(message, subscription_message, reply_markup=markup, parse_mode='Markdown')
         return
-    wa_text = (
-        "\U0001F4F1 𝐖𝐡𝐚𝐭𝐬𝐀𝐩𝐩 ʙᴏᴛ ʜᴏꜱᴛɪɴɢ\n\n"
-        "┃ ⬆️ ᴡʜ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ  — `.py` · `.js` · `.zip`\n"
-        "┃ 📱 ᴍʏ ᴡʜᴀᴛꜱᴀᴘᴘ      — ᴄʜᴀʟᴛᴇ ʙᴏᴛꜱ ᴍᴀɴᴀɢᴇ\n"
-        "┃ 🧩 ᴡʜ ᴅᴇᴘᴇɴᴅᴇɴᴄʏ     — ʟɪʙʀᴀʀʏ ɪɴꜱᴛᴀʟʟ\n"
-        "┃ 🌀 ᴡʜ ꜱᴘᴇᴇᴅ          — ᴡʜ ᴘɪɴɢ\n"
-        "┃ 🔙 ʙᴀᴄᴋ              — ᴍᴀɪɴ ᴍᴇɴᴜ\n\n"
-        "\U0001F6A9 ʜᴀʀ ᴡʜᴀᴛꜱᴀᴘᴘ ꜰɪʟᴇ ꜱᴄᴀɴ ʜᴏᴋᴀʀ ᴀᴅᴍɪɴ ᴀᴘᴘʀᴏᴠᴀʟ ᴋᴇ ʙᴀᴀᴅ ʜɪ ʀᴜɴ ʜᴏᴛɪ ʜᴀɪ"
-    )
+    wa_text = "\U0001F4F1 𝐖𝐡𝐚𝐭𝐬𝐀𝐩𝐩 ʙᴏᴛ ʜᴏꜱᴛɪɴɢ\n\n👇 ᴜꜱᴇ ᴛʜᴇ ʙᴜᴛᴛᴏɴꜱ ʙᴇʟᴏᴡ"
     bot.reply_to(message, wa_text, reply_markup=create_reply_keyboard_wa_menu(user_id))
 
 def _logic_wa_upload(message):
@@ -4977,7 +4969,7 @@ def _logic_wa_upload(message):
         bot.reply_to(message, f"\U0001F9BA {_t('slots full')} [{current_files}/{limit_str}] \u2014 {_t('remove one or buy subscription')} \u2192 {_t('contact')} {YOUR_USERNAME}")
         return
     wa_sessions[user_id] = True
-    bot.reply_to(message, f"\U0001F3AF ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛ ᴋᴇ ʟɪʏᴇ `.py` · `.js` · `.zip` ꜰɪʟᴇ ʙʜᴇᴊᴏ\ntɪᴛᴘɪɴɢ ⬆️ ᴡʜ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ ᴘʜɪʀ ꜰɪʟᴇ", parse_mode='Markdown')
+    bot.reply_to(message, f"\U0001F3AF ꜱᴇɴᴅ `.py` · `.js` · `.zip` ꜰɪʟᴇ\nᴛɪᴘ: ᴛᴀᴘ ⬆️ ᴡʜ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ ᴛʜᴇɴ ꜱᴇɴᴅ ᴛʜᴇ ꜰɪʟᴇ", parse_mode='Markdown')
 
 def _logic_wa_dependency(message):
     user_id = message.from_user.id
@@ -4992,7 +4984,7 @@ def _logic_wa_dependency(message):
     if bot_locked and user_id not in admin_ids:
         bot.reply_to(message, "⚠️ Bot locked by admin. Try later.")
         return
-    bot.reply_to(message, "\U0001F9E9 ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛ ᴋᴇ ʟɪʏᴇ ɴᴀᴍᴇ ʙʜᴇᴊᴏ\n(e.g. `pillow` · `opencv` · `requests` · node: `npm:name`)\n/cancel to quit")
+    bot.reply_to(message, "\U0001F9E9 ꜱᴇɴᴅ ᴘᴀᴄᴋᴀɢᴇ ɴᴀᴍᴇ\n(e.g. `pillow` · `opencv` · `requests` · node: `npm:name`)\n/cancel to quit")
     bot.register_next_step_handler(message, _process_wa_install_module)
 
 def _process_wa_install_module(message):
@@ -5037,7 +5029,7 @@ def _send_wa_list(chat_id, owner_id):
     try:
         wa_files_list = wa_user_files.get(owner_id, [])
         if not wa_files_list:
-            bot.send_message(chat_id, "🗂️ ᴋᴏɪ ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛ ɴᴀʜɪ ʜᴀɪ ʏᴇᴛ 🚀", reply_markup=create_reply_keyboard_wa_menu(owner_id))
+            bot.send_message(chat_id, "🗂️ ɴᴏ ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛ ʏᴇᴛ 🚀", reply_markup=create_reply_keyboard_wa_menu(owner_id))
             return
         markup = types.InlineKeyboardMarkup(row_width=1)
         for file_name, file_type in sorted(wa_files_list):
@@ -5056,7 +5048,7 @@ def _logic_wa_my(message):
         return
     wa_files_list = wa_user_files.get(user_id, [])
     if not wa_files_list:
-        bot.reply_to(message, f"\U0001F5C2\uFE0F ᴋᴏɪ ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛ ɴᴀʜɪ ʜᴀɪ ʏᴇᴛ\nyᴀʜᴀ ᴘʜɪʟᴀ ꜱᴄʀɪᴘᴛ ʙʜᴇᴊᴏ \U0001F680", reply_markup=create_reply_keyboard_wa_menu(user_id))
+        bot.reply_to(message, f"\U0001F5C2\uFE0F ɴᴏ ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛ ʏᴇᴛ\nꜱᴇɴᴅ ʏᴏᴜʀ ꜰɪʀꜱᴛ ꜱᴄʀɪᴘᴛ \U0001F680", reply_markup=create_reply_keyboard_wa_menu(user_id))
         return
     markup = types.InlineKeyboardMarkup(row_width=1)
     for file_name, file_type in sorted(wa_files_list):
