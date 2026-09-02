@@ -413,6 +413,7 @@ def load_data():
             c.execute("SELECT app_value FROM h2_settings WHERE app_key='bot_locked'")
             _row = c.fetchone()
             bot_locked = bool(_row and _row[0] == '1')
+            if bot_locked: logger.warning("Bot loaded in LOCKED state (persisted).")
         except Exception as e:
             logger.warning(f"bot_locked meta restore ignored: {e}")
 
