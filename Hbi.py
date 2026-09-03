@@ -1,4 +1,22 @@
 # -*- coding: utf-8 -*-
+"""
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║   ███████ ███████ ███████ ███████ ██████  ██    ██ ███    ███ ║
+║   ██      ██      ██      ██      ██   ██ ██    ██ ████  ████║
+║   █████   █████   █████   █████   ██████  ██    ██ ██ ████ ██║
+║   ██      ██      ██      ██      ██   ██ ██    ██ ██  ██  ██║
+║   ██      ██      ██      ███████ ██   ██  ██████  ██      ██║
+║                                                              ║
+║   🤖 ZEX HOSTING BOT v2.0                                   ║
+║   🛡️ Secure · Fast · Reliable                               ║
+║   📱 WhatsApp · 🌐 Web · 🤖 Bot Hosting                     ║
+║   🔒 AI Security · ⚡ Auto Deploy · 📊 Live Stats            ║
+║                                                              ║
+║   Made with ❤️ by ZEX Team                                   ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
+"""
 import telebot
 import subprocess
 import os
@@ -8091,36 +8109,18 @@ def _logic_stray_text(message):
 if __name__ == '__main__':
     banner = """
 ╔══════════════════════════════════════════════╗
-║                                              ║
-║   ███████╗██╗  ██╗███████╗                   ║
-║   ██╔════╝╚██╗██╔╝██╔════╝                   ║
-║   █████╗   ╚███╔╝ █████╗                     ║
-║   ██╔══╝   ██╔██╗ ██╔══╝                     ║
-║   ███████╗██╔╝ ██╗███████╗                   ║
-║   ╚══════╝╚═╝  ╚═╝╚══════╝                   ║
-║                                              ║
-║        ███╗   ███╗██╗  ██╗███████╗           ║
-║        ████╗ ████║╚██╗██╔╝██╔════╝           ║
-║        ██╔████╔██║ ╚███╔╝ █████╗             ║
-║        ██║╚██╔╝██║ ██╔██╗ ██╔══╝             ║
-║        ██║ ╚═╝ ██║██╔╝ ██╗███████╗           ║
-║        ╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝           ║
-║                                              ║
-║   🤖 ZEX HOSTING BOT v2.0                    ║
-║   🛡️ Secure · Fast · Reliable                ║
-║                                              ║
+║   🤖 ZEX HOSTING BOT v2.0                   ║
+║   🛡️ Secure · Fast · Reliable               ║
 ╚══════════════════════════════════════════════╝
 """
     logger.info(banner)
-    logger.info("🤖 ZEX Hosting Bot Starting Up...")
     logger.info(f"🐍 Python: {sys.version.split()[0]}")
     logger.info(f"🔧 Base Dir: {BASE_DIR}")
     logger.info(f"📁 Upload Dir: {UPLOAD_BOTS_DIR}")
     logger.info(f"📊 Data Dir: {IROTECH_DIR}")
     logger.info(f"🔑 Owner ID: {OWNER_ID}")
     logger.info(f"🛡️ Admins: {len(admin_ids)}")
-    logger.info(f"🚫 Banned Users: {len(banned_users)}")
-    logger.info(f"📢 Mandatory Channels: {len(mandatory_channels)}")
+    logger.info(f"🚫 Banned: {len(banned_users)} | 📢 Channels: {len(mandatory_channels)}")
     logger.info("="*50)
     keep_alive()
     logger.info("🚀 Starting polling...")
