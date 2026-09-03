@@ -30,16 +30,20 @@ def lilm_font(text):
     links = re.findall(r'https?://\S+', text)
     users = re.findall(r'@\w+', text)
     cmds  = re.findall(r'/\w+', text)
+    html_tags = re.findall(r'</?[a-zA-Z][^>]*>', text)
 
     # placeholders: control chars + digits only (letters would get font-mangled)
     for i, l in enumerate(links):
-        text = text.replace(l, f"\x01{1000 + i}\x02")
+        text = text.replace(l, f"\x01{1000 + i}\x02", 1)
 
     for i, u in enumerate(users):
-        text = text.replace(u, f"\x01{2000 + i}\x02")
+        text = text.replace(u, f"\x01{2000 + i}\x02", 1)
 
     for i, c in enumerate(cmds):
-        text = text.replace(c, f"\x01{3000 + i}\x02")
+        text = text.replace(c, f"\x01{3000 + i}\x02", 1)
+
+    for i, h in enumerate(html_tags):
+        text = text.replace(h, f"\x01{4000 + i}\x02", 1)
 
     normal = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
     cute   = "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀꜱᴛᴜᴠᴡxʏᴢᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀꜱᴛᴜᴠᴡxʏᴢ"
@@ -54,6 +58,9 @@ def lilm_font(text):
 
     for i, c in enumerate(cmds):
         text = text.replace(f"\x01{3000 + i}\x02", c)
+
+    for i, h in enumerate(html_tags):
+        text = text.replace(f"\x01{4000 + i}\x02", h)
 
     return text
 
