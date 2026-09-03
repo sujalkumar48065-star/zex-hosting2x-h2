@@ -335,6 +335,8 @@ ADMIN_COMMAND_BUTTONS_LAYOUT_PANEL = [
     ["👥 ᴜꜱᴇʀꜱ", "🔧 ꜱᴇᴛᴛɪɴɢ"],
     ["📡 ᴄʜᴀɴɴᴇʟ", "⏹ ꜱᴛᴏᴘ ᴀʟʟ"],
     ["🧹 ᴄʟᴇᴀɴᴜᴘ", "🛡️ ᴀᴅᴍɪɴ"],
+    ["📋 ᴘᴇɴᴅɪɴɢ", "🌐 ᴡᴇʙ ꜱɪᴛᴇꜱ"],
+    ["📱 ᴡᴀ ʙᴏᴛꜱ", "🤖 ʙᴏᴛ ꜱᴛᴀᴛᴜꜱ"],
     ["🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"]
 ]
 
@@ -503,6 +505,28 @@ class AISecurityAnalyzer:
         ("tunnel_expose", 28, "🌍 ᴏᴘᴇɴꜱ ᴘᴜʙʟɪᴄ ᴛᴜɴɴᴇʟ",
             [r'pyngrok|ngrok\.connect|ngrok\.com', r'localtunnel', r'serveo', r'localhost\.run',
              r'cloudflared|trycloudflare', r'bore\.pub|zrok\.io']),
+        # === NEW THREATS (2026+) ===
+        ("obfuscated_code", 35, "🔒 ᴏʙꜰᴜꜱᴄᴀᴛᴇᴅ / ᴇɴᴄᴏᴅᴇᴅ ᴄᴏᴅᴇ (ʜɪᴅᴅᴇɴ ᴘᴀʏʟᴏᴀᴅ)",
+            [r'eval\s*\(\s*base64\.b64decode', r'exec\s*\(\s*bytes\.fromhex', r'codecs\.decode\s*\(',
+             r'\\x[0-9a-fA-F]{2}(\\x[0-9a-fA-F]{2}){5,}', r'chr\s*\(\s*\d+\s*\)\s*\+.*chr\s*\(',
+             r'compile\s*\(\s*[\'\"]\\x', r'__import__\s*\(\s*[\'\"]base64']),
+        ("whatsapp_session", 50, "📱 ᴡʜᴀᴛꜱᴀᴘᴘ ꜱᴇꜱꜱɪᴏɴ ʜɪᴊᴀᴄᴋɪɴɢ",
+            [r'whatsapp-webjs|whatsapp-web\.js', r'@whiskeysockets/baileys', r'session\.decode',
+             r'creds\.json', r'WASessionStore', r'whatsapp-web:\s*.*client',
+             r'puppeteer.{0,50}whatsapp', r'webwhatsapp|web\.whatsapp']),
+        ("web_xss", 40, "🌐 ᴡᴇʙ ᴄʀᴏꜱꜱ-ꜱɪᴛᴇ ꜱᴄʀɪᴘᴛɪɴɢ (XSS)",
+            [r'document\.cookie\s*=', r'document\.write\s*\(', r'innerHTML\s*=',
+             r'eval\s*\(\s*document\.', r'window\.location\s*=.*\+', r'\.html\s*\(\s*.*\+.*req\.',
+             r'req\.body\.\w+\s*\+.*<script', r'alert\s*\(\s*document\.']),
+        ("web_sql_injection", 45, "🌐 ꜱǫʟ ɪɴᴊᴇᴄᴛɪᴏɴ ᴅᴇᴛᴇᴄᴛᴇᴅ",
+            [r'"\s*\+\s*req\.(body|query|params)\.\w+.*\+', r"'\s*\+\s*req\.(body|query|params)\.\w+.*\+",
+             r'(SELECT|INSERT|UPDATE|DELETE)\s+.*\+\s*\$', r"query\s*\(\s*['\"].*\+\s*req\."]),
+        ("dns_exfil", 38, "📤 ᴅᴀᴛᴀ ᴇxꜰɪʟᴛʀᴀᴛɪᴏɴ ᴠɪᴀ DNS",
+            [r'dns\.lookup', r'dns\.resolve', r'socket\.gethostbyname', r'nslookup.*\+.*',
+             r'dns\.createQuery', r'\.resolve\s*\(\s*.*\+.*secret']),
+        ("privilege_escalation", 42, "⬆️ ᴘʀɪᴠɪʟᴇɢᴇ ᴇꜱᴄᴀʟᴀᴛɪᴏɴ",
+            [r'chmod\s+[0-7]*7[0-7]*\s+/', r'sudo\s+chown', r'os\.setuid', r'os\.setgid',
+             r'/etc/sudoers', r'passwd\s+-d', r'usermod\s+-aG\s+sudo']),
     ]
     CMD_EXEC = ("cmd_exec", 10, "🖥 ꜱʜᴇʟʟ ᴄᴏᴍᴍᴀɴᴅ ᴘᴀᴛᴛᴇʀɴ (ʟᴏᴡ ʀɪꜱᴋ ᴀʟᴏɴᴇ)")
     CMD_PATTERNS = [r'subprocess\.(call|run|popen|check_output)\([^)]*shell\s*=\s*True',
@@ -603,6 +627,12 @@ class AISecurityAnalyzer:
             'persist':     "malware auto-restarts after every reboot",
             'deser_exec':  "hidden code runs via data files",
             'tunnel_expose':"device becomes reachable by whole internet",
+            'obfuscated_code':"hidden payload via encoded/obfuscated code",
+            'whatsapp_session':"WhatsApp session can be hijacked/stolen",
+            'web_xss':     "cross-site scripting can steal user data",
+            'web_sql_injection':"SQL injection can dump database",
+            'dns_exfil':   "data exfiltrated via DNS queries",
+            'privilege_escalation':"attacker can gain root/admin access",
         }
         if best_score >= 90:   v_emoji, v_status, v_rec = "⛔", "DANGEROUS", "NO - never approve"
         elif best_score >= 70: v_emoji, v_status, v_rec = "🔴", "HIGH RISK", "NO"
@@ -638,10 +668,13 @@ class GrokSecurityScanner:
     """xAI Grok deep-scan with 3-key failover. Returns dict or None."""
     SYSTEM_PROMPT = (
         "You are a code security auditor for a public bot hosting platform. "
-        "Flag ONLY these real threats: reverse shells, remote-access backdoors, "
+        "Flag these real threats: reverse shells, remote-access backdoors, "
         "stealing tokens/passwords/cookies from the host or other users, "
         "keyloggers, crypto miners, destructive system-wide deletions, "
-        "fork bombs. Normal Telegram bot code that uses requests, subprocess, "
+        "fork bombs, WhatsApp session hijacking, XSS/SQL injection in web code, "
+        "data exfiltration via DNS/webhooks, obfuscated/encoded payloads, "
+        "privilege escalation, and tunnel exposure. "
+        "Normal Telegram bot code that uses requests, subprocess, "
         "socket or reads its OWN .env is NOT a threat. "
         "Score: 0-19 safe, 20-44 mostly safe, 45-69 risky, 70-100 dangerous. "
         'Respond ONLY with minified JSON, no markdown: {"score": int, "findings": ["short human-readable risk", ...], "summary": "one short line"}'
@@ -3747,6 +3780,163 @@ def _logic_admin_settings(message):
     bot.reply_to(message, "\U0001F527 system tools\ninfo \u00b7 cleanup \u00b7 logs", 
                  reply_markup=create_admin_settings_menu())
 
+# --- Admin Panel: Pending Approvals ---
+def _logic_pending_approvals(message):
+    if message.from_user.id not in admin_ids:
+        bot.reply_to(message, "\U0001F512 staff only area.")
+        return
+    parts = ["📋 **Pending Approvals**\n"]
+    total = 0
+
+    # ZIP files pending
+    zip_count = sum(len(files) for files in pending_zip_files.values())
+    if zip_count:
+        parts.append(f"📦 Bot ZIP files: {zip_count}")
+        for uid, files in list(pending_zip_files.items())[:5]:
+            for fn in list(files.keys())[:3]:
+                parts.append(f"  • `{fn}` (user `{uid}`)")
+        total += zip_count
+
+    # Web files pending
+    if web_pending:
+        parts.append(f"🌐 Web files: {len(web_pending)}")
+        for k, v in list(web_pending.items())[:5]:
+            parts.append(f"  • `{v.get('name', k)}` (user `{v.get('uid', '?')}`)")
+        total += len(web_pending)
+
+    # GitHub repos pending
+    if gh_pending:
+        parts.append(f"🐙 GitHub repos: {len(gh_pending)}")
+        for k, v in list(gh_pending.items())[:5]:
+            parts.append(f"  • `{v.get('repo', k)}` (user `{v.get('uid', '?')}`)")
+        total += len(gh_pending)
+
+    # WA ZIP pending
+    wa_zip_count = sum(len(files) for files in wa_pending_zip_files.values())
+    if wa_zip_count:
+        parts.append(f"📱 WA ZIP files: {wa_zip_count}")
+        for uid, files in list(wa_pending_zip_files.items())[:5]:
+            for fn in list(files.keys())[:3]:
+                parts.append(f"  • `{fn}` (user `{uid}`)")
+        total += wa_zip_count
+
+    # Module installs pending
+    if pending_modules:
+        parts.append(f"🧩 Module installs: {len(pending_modules)}")
+        for uid, mods in list(pending_modules.items())[:5]:
+            for mod in list(mods.keys())[:3]:
+                parts.append(f"  • `{mod}` (user `{uid}`)")
+        total += len(pending_modules)
+
+    if total == 0:
+        parts.append("✅ No pending approvals — all clear!")
+    else:
+        parts.append(f"\n**Total: {total} pending**")
+
+    bot.reply_to(message, "\n".join(parts), parse_mode='Markdown')
+
+# --- Admin Panel: Web Sites Management ---
+def _logic_web_sites_admin(message):
+    if message.from_user.id not in admin_ids:
+        bot.reply_to(message, "\U0001F512 staff only area.")
+        return
+    parts = ["🌐 **Web Sites**\n"]
+    if not web_manifest:
+        parts.append("No websites deployed.")
+    else:
+        for name, data in list(web_manifest.items())[:15]:
+            uid = data.get('uid', '?')
+            created = data.get('created', '?')
+            ftype = data.get('ftype', '?')
+            parts.append(f"• `{name}` — user `{uid}` · {ftype} · {created}")
+        if len(web_manifest) > 15:
+            parts.append(f"… and {len(web_manifest) - 15} more")
+        parts.append(f"\n**Total: {len(web_manifest)} website(s)**")
+    bot.reply_to(message, "\n".join(parts), parse_mode='Markdown')
+
+# --- Admin Panel: WA Bots Management ---
+def _logic_wa_bots_admin(message):
+    if message.from_user.id not in admin_ids:
+        bot.reply_to(message, "\U0001F512 staff only area.")
+        return
+    parts = ["📱 **WhatsApp Bots**\n"]
+
+    # Running WA bots
+    running_count = len(wa_bot_scripts)
+    if running_count:
+        parts.append(f"▶️ Running: {running_count}")
+        for sk, info in list(wa_bot_scripts.items())[:10]:
+            fn = info.get('file_name', '?')
+            uid = info.get('owner_id', '?')
+            parts.append(f"  • `{fn}` (user `{uid}`)")
+    else:
+        parts.append("▶️ Running: 0")
+
+    # WA users + files
+    total_users = len(wa_user_files)
+    total_files = sum(len(files) for files in wa_user_files.values())
+    parts.append(f"\n👥 Users: {total_users} · Files: {total_files}")
+
+    if total_users > 0:
+        for uid, files in list(wa_user_files.items())[:10]:
+            names = [f[0] for f in files[:3]]
+            more = f" +{len(files)-3}" if len(files) > 3 else ""
+            parts.append(f"  • User `{uid}`: {', '.join(names)}{more}")
+
+    bot.reply_to(message, "\n".join(parts), parse_mode='Markdown')
+
+# --- Admin Panel: Bot Status ---
+def _logic_bot_status_admin(message):
+    if message.from_user.id not in admin_ids:
+        bot.reply_to(message, "\U0001F512 staff only area.")
+        return
+    running, stopped, failed = [], [], []
+    for uid, files in sorted(user_files.items()):
+        for fname, ftype in files:
+            if is_bot_running(uid, fname):
+                running.append((uid, fname, ftype))
+            else:
+                log_path = os.path.join(get_user_folder(uid), f"{os.path.splitext(fname)[0]}.log")
+                crashed = False
+                try:
+                    if os.path.exists(log_path) and os.path.getsize(log_path) > 0:
+                        with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            tail = f.read()[-2000:]
+                        if 'Traceback' in tail or '\nError' in tail:
+                            crashed = True
+                except Exception:
+                    pass
+                if crashed:
+                    failed.append((uid, fname, ftype))
+                else:
+                    stopped.append((uid, fname, ftype))
+
+    parts = ["🤖 **Bot Status**\n"]
+    parts.append(f"🟢 Running: {len(running)} | 🔴 Stopped: {len(stopped)} | 💥 Failed: {len(failed)}")
+
+    if running:
+        parts.append("\n**Running:**")
+        for uid, fname, ftype in running[:10]:
+            parts.append(f"• `{fname}` ({ftype}) — user `{uid}`")
+        if len(running) > 10:
+            parts.append(f"… and {len(running) - 10} more")
+
+    if failed:
+        parts.append("\n**Failed/Crashed:**")
+        for uid, fname, ftype in failed[:5]:
+            parts.append(f"• `{fname}` ({ftype}) — user `{uid}`")
+        if len(failed) > 5:
+            parts.append(f"… and {len(failed) - 5} more")
+
+    # WA bots summary
+    wa_running = len(wa_bot_scripts)
+    parts.append(f"\n📱 WA Bots running: {wa_running}")
+
+    # Web sites count
+    parts.append(f"🌐 Web sites: {len(web_manifest)}")
+
+    bot.reply_to(message, "\n".join(parts), parse_mode='Markdown')
+
 def _logic_run_all_scripts(message_or_call):
     if isinstance(message_or_call, telebot.types.Message):
         admin_user_id = message_or_call.from_user.id
@@ -4031,23 +4221,148 @@ def _logic_owner_status(message):
     bot.reply_to(message, msg, parse_mode='Markdown')
 
 # --- /cleanup (OWNER ONLY) ---
-def _perform_hosting_cleanup():
-    cleaned_dirs = 0
-    cleaned_files = 0
-    cleaned_temp = 0
-    cleaned_web = 0
-    killed_zombies = 0
+def _cleanup_preview():
+    """Build a preview of what cleanup will remove. Returns (preview_text, cleanup_data)."""
+    items = []
+    counts = {'zombies': 0, 'user_logs': 0, 'user_files': 0, 'wa_files': 0,
+              'web_stale': 0, 'temp_dirs': 0, 'expired_subs': 0, 'old_logs': 0,
+              'pending_old': 0, 'empty_dirs': 0}
 
-    running_basenames = set()
+    # 1. Zombie/dead scripts
+    for key, info in list(bot_scripts.items()):
+        try:
+            proc = psutil.Process(info['process'].pid)
+            if not proc.is_running() or proc.status() == psutil.STATUS_ZOMBIE:
+                counts['zombies'] += 1
+        except Exception:
+            counts['zombies'] += 1
+    if counts['zombies']:
+        items.append(f"💀 {counts['zombies']} dead/zombie script(s)")
+
+    # 2. User log files (7+ days old, not running)
+    running_bases = set()
     for key, info in list(bot_scripts.items()):
         try:
             proc = psutil.Process(info['process'].pid)
             if proc.is_running() and proc.status() != psutil.STATUS_ZOMBIE:
-                running_basenames.add(os.path.splitext(info.get('file_name', ''))[0])
+                running_bases.add(os.path.splitext(info.get('file_name', ''))[0])
         except Exception:
             pass
+    for user_dir in os.listdir(UPLOAD_BOTS_DIR):
+        user_path = os.path.join(UPLOAD_BOTS_DIR, user_dir)
+        if not os.path.isdir(user_path):
+            continue
+        for fn in os.listdir(user_path):
+            if fn.endswith('.log') and os.path.splitext(fn)[0] not in running_bases:
+                fp = os.path.join(user_path, fn)
+                try:
+                    if time.time() - os.path.getmtime(fp) > 7 * 86400:
+                        counts['user_logs'] += 1
+                except Exception:
+                    pass
+    if counts['user_logs']:
+        items.append(f"📋 {counts['user_logs']} old log file(s) (7+ days)")
 
-    # zombie / dead scripts still registered in bot_scripts -> drop them
+    # 3. User bot files not running and inactive 30+ days
+    for uid, files in list(user_files.items()):
+        for fname, ftype in files:
+            if not is_bot_running(uid, fname):
+                fp = os.path.join(get_user_folder(uid), fname)
+                try:
+                    if os.path.exists(fp) and time.time() - os.path.getmtime(fp) > 30 * 86400:
+                        counts['user_files'] += 1
+                except Exception:
+                    pass
+    if counts['user_files']:
+        items.append(f"🤖 {counts['user_files']} inactive bot file(s) (30+ days)")
+
+    # 4. WA bot files not running
+    for uid, files in list(wa_user_files.items()):
+        for fname, ftype in files:
+            sk = f"{uid}_{fname}"
+            if sk not in wa_bot_scripts:
+                fp = os.path.join(get_user_folder(uid), 'wa', fname)
+                try:
+                    if os.path.exists(fp) and time.time() - os.path.getmtime(fp) > 30 * 86400:
+                        counts['wa_files'] += 1
+                except Exception:
+                    pass
+    if counts['wa_files']:
+        items.append(f"📱 {counts['wa_files']} inactive WA file(s) (30+ days)")
+
+    # 5. Stale web dirs (no manifest entry)
+    try:
+        for name in os.listdir(WEB_FILES_DIR):
+            folder = os.path.join(WEB_FILES_DIR, name)
+            if os.path.isdir(folder) and name not in web_manifest:
+                counts['web_stale'] += 1
+    except Exception:
+        pass
+    if counts['web_stale']:
+        items.append(f"🌐 {counts['web_stale']} stale web folder(s)")
+
+    # 6. Temp dirs (24+ hrs)
+    try:
+        temp_root = tempfile.gettempdir()
+        for name in os.listdir(temp_root):
+            if name.startswith('user_') and '_zip_' in name:
+                p = os.path.join(temp_root, name)
+                if os.path.isdir(p) and time.time() - os.path.getmtime(p) > 86400:
+                    counts['temp_dirs'] += 1
+    except Exception:
+        pass
+    if counts['temp_dirs']:
+        items.append(f"🗑 {counts['temp_dirs']} old temp folder(s)")
+
+    # 7. Expired subscriptions
+    now = datetime.now()
+    for uid, sub in list(user_subscriptions.items()):
+        exp = sub.get('expiry')
+        if exp and isinstance(exp, datetime) and exp < now:
+            counts['expired_subs'] += 1
+    if counts['expired_subs']:
+        items.append(f"💳 {counts['expired_subs']} expired subscription(s)")
+
+    # 8. Pending approvals older than 24 hrs
+    for pend_dict in [pending_zip_files, web_pending, gh_pending, wa_pending_zip_files]:
+        for k, v in list(pend_dict.items()):
+            ts = v.get('ts') or v.get('created')
+            if ts:
+                try:
+                    if isinstance(ts, str):
+                        ts = datetime.fromisoformat(ts)
+                    if (now - ts).total_seconds() > 86400:
+                        counts['pending_old'] += 1
+                except Exception:
+                    pass
+    if counts['pending_old']:
+        items.append(f"⏳ {counts['pending_old']} stale pending approval(s)")
+
+    # 9. Empty user dirs
+    for user_dir in os.listdir(UPLOAD_BOTS_DIR):
+        user_path = os.path.join(UPLOAD_BOTS_DIR, user_dir)
+        if os.path.isdir(user_path) and not os.listdir(user_path):
+            counts['empty_dirs'] += 1
+    if counts['empty_dirs']:
+        items.append(f"📂 {counts['empty_dirs']} empty user folder(s)")
+
+    total = sum(counts.values())
+    preview = "🧹 **Cleanup Preview**\n\n"
+    if total == 0:
+        preview += "✅ Nothing to clean — bot is tidy!"
+        return preview, counts
+    preview += "\n".join(items)
+    preview += f"\n\n**Total: {total} item(s) to remove**"
+    return preview, counts
+
+
+def _perform_hosting_cleanup():
+    """Execute the full cleanup. Returns summary dict."""
+    c = {'zombies': 0, 'user_logs': 0, 'user_files': 0, 'wa_files': 0,
+         'web_stale': 0, 'temp_dirs': 0, 'expired_subs': 0, 'old_logs': 0,
+         'pending_old': 0, 'empty_dirs': 0}
+
+    # 1. Kill zombie/dead scripts
     for key, info in list(bot_scripts.items()):
         try:
             proc = psutil.Process(info['process'].pid)
@@ -4055,79 +4370,159 @@ def _perform_hosting_cleanup():
                 bot_scripts.pop(key, None)
                 try: proc.kill()
                 except Exception: pass
-                killed_zombies += 1
+                c['zombies'] += 1
         except Exception:
             bot_scripts.pop(key, None)
-            killed_zombies += 1
+            c['zombies'] += 1
 
+    # 2. Clean old log files (7+ days)
+    running_bases = set()
+    for key, info in list(bot_scripts.items()):
+        try:
+            proc = psutil.Process(info['process'].pid)
+            if proc.is_running() and proc.status() != psutil.STATUS_ZOMBIE:
+                running_bases.add(os.path.splitext(info.get('file_name', ''))[0])
+        except Exception:
+            pass
     for user_dir in os.listdir(UPLOAD_BOTS_DIR):
         user_path = os.path.join(UPLOAD_BOTS_DIR, user_dir)
         if not os.path.isdir(user_path):
             continue
-        try:
-            if not os.listdir(user_path):
-                os.rmdir(user_path)
-                cleaned_dirs += 1
-            else:
-                for file_name in os.listdir(user_path):
-                    if not file_name.endswith('.log'):
-                        continue
-                    base = os.path.splitext(file_name)[0]
-                    if base in running_basenames:
-                        continue
-                    file_path = os.path.join(user_path, file_name)
-                    try:
-                        if time.time() - os.path.getmtime(file_path) > 7 * 24 * 3600:
-                            os.remove(file_path)
-                            cleaned_files += 1
-                    except Exception as e:
-                        logger.error(f"Error cleaning log file {file_path}: {e}")
-        except Exception as e:
-            logger.error(f"Error cleaning user dir {user_path}: {e}")
+        for fn in os.listdir(user_path):
+            if fn.endswith('.log') and os.path.splitext(fn)[0] not in running_bases:
+                fp = os.path.join(user_path, fn)
+                try:
+                    if time.time() - os.path.getmtime(fp) > 7 * 86400:
+                        os.remove(fp)
+                        c['user_logs'] += 1
+                except Exception:
+                    pass
 
-    # web_files/ dirs with no matching manifest entry -> stale
+    # 3. Clean inactive user bot files (30+ days, not running)
+    for uid, files in list(user_files.items()):
+        for fname, ftype in list(files):
+            if not is_bot_running(uid, fname):
+                fp = os.path.join(get_user_folder(uid), fname)
+                try:
+                    if os.path.exists(fp) and time.time() - os.path.getmtime(fp) > 30 * 86400:
+                        os.remove(fp)
+                        c['user_files'] += 1
+                except Exception:
+                    pass
+
+    # 4. Clean inactive WA files (30+ days, not running)
+    for uid, files in list(wa_user_files.items()):
+        for fname, ftype in list(files):
+            sk = f"{uid}_{fname}"
+            if sk not in wa_bot_scripts:
+                fp = os.path.join(get_user_folder(uid), 'wa', fname)
+                try:
+                    if os.path.exists(fp) and time.time() - os.path.getmtime(fp) > 30 * 86400:
+                        os.remove(fp)
+                        c['wa_files'] += 1
+                except Exception:
+                    pass
+
+    # 5. Clean stale web dirs
     try:
         for name in list(os.listdir(WEB_FILES_DIR)):
             folder = os.path.join(WEB_FILES_DIR, name)
-            if not os.path.isdir(folder):
-                continue
-            if name not in web_manifest:
+            if os.path.isdir(folder) and name not in web_manifest:
                 shutil.rmtree(folder, ignore_errors=True)
-                cleaned_web += 1
-    except Exception as e:
-        logger.error(f"Error cleaning web files: {e}")
+                c['web_stale'] += 1
+    except Exception:
+        pass
 
+    # 6. Clean temp dirs (24+ hrs)
     try:
         temp_root = tempfile.gettempdir()
         for name in os.listdir(temp_root):
             if name.startswith('user_') and '_zip_' in name:
                 p = os.path.join(temp_root, name)
-                try:
-                    if os.path.isdir(p) and (time.time() - os.path.getmtime(p)) > 24 * 3600:
-                        shutil.rmtree(p, ignore_errors=True)
-                        cleaned_temp += 1
-                except Exception as e:
-                    logger.error(f"Error cleaning temp dir {p}: {e}")
-    except Exception as e:
-        logger.error(f"Error scanning temp dir: {e}")
+                if os.path.isdir(p) and time.time() - os.path.getmtime(p) > 86400:
+                    shutil.rmtree(p, ignore_errors=True)
+                    c['temp_dirs'] += 1
+    except Exception:
+        pass
 
-    return cleaned_dirs, cleaned_files, cleaned_temp, cleaned_web, killed_zombies
+    # 7. Clean expired subscriptions
+    now = datetime.now()
+    for uid, sub in list(user_subscriptions.items()):
+        exp = sub.get('expiry')
+        if exp and isinstance(exp, datetime) and exp < now:
+            user_subscriptions.pop(uid, None)
+            try:
+                conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
+                conn.execute('DELETE FROM subscriptions WHERE user_id = ?', (uid,))
+                conn.commit()
+                conn.close()
+            except Exception:
+                pass
+            c['expired_subs'] += 1
+
+    # 8. Clean stale pending approvals (24+ hrs)
+    for pend_dict in [pending_zip_files, web_pending, gh_pending, wa_pending_zip_files]:
+        to_del = []
+        for k, v in list(pend_dict.items()):
+            ts = v.get('ts') or v.get('created')
+            if ts:
+                try:
+                    if isinstance(ts, str):
+                        ts = datetime.fromisoformat(ts)
+                    if (now - ts).total_seconds() > 86400:
+                        to_del.append(k)
+                except Exception:
+                    pass
+        for k in to_del:
+            pend_dict.pop(k, None)
+            c['pending_old'] += 1
+
+    # 9. Clean empty user dirs
+    for user_dir in os.listdir(UPLOAD_BOTS_DIR):
+        user_path = os.path.join(UPLOAD_BOTS_DIR, user_dir)
+        if os.path.isdir(user_path) and not os.listdir(user_path):
+            try:
+                os.rmdir(user_path)
+                c['empty_dirs'] += 1
+            except Exception:
+                pass
+
+    return c
+
 
 def _logic_owner_cleanup(message):
     if not _require_owner(message): return
+    preview, _ = _cleanup_preview()
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    markup.row(
+        types.InlineKeyboardButton("✅ Confirm Cleanup", callback_data="cleanup_confirm"),
+        types.InlineKeyboardButton("❌ Cancel", callback_data="back_to_main")
+    )
+    bot.reply_to(message, preview, reply_markup=markup, parse_mode='Markdown')
+
+
+def _cleanup_execute(chat_id):
+    """Run cleanup and send summary."""
     try:
-        cleaned_dirs, cleaned_files, cleaned_temp, cleaned_web, killed_zombies = _perform_hosting_cleanup()
-        bot.reply_to(message,
-                     f"🧹 **Cleanup Complete:**\n"
-                     f"• Removed empty directories: {cleaned_dirs}\n"
-                     f"• Cleared old log files: {cleaned_files}\n"
-                     f"• Removed stale temp dirs: {cleaned_temp}\n"
-                     f"• Removed stale web dirs: {cleaned_web}\n"
-                     f"• Killed dead/zombie sessions: {killed_zombies}",
-                     parse_mode='Markdown')
+        c = _perform_hosting_cleanup()
+        total = sum(c.values())
+        if total == 0:
+            bot.send_message(chat_id, "🧹 Nothing to clean — bot is tidy!")
+            return
+        parts = ["🧹 **Cleanup Complete:**\n"]
+        labels = {'zombies': '💀 Dead/zombie scripts', 'user_logs': '📋 Old log files',
+                  'user_files': '🤖 Inactive bot files', 'wa_files': '📱 Inactive WA files',
+                  'web_stale': '🌐 Stale web folders', 'temp_dirs': '🗑 Old temp folders',
+                  'expired_subs': '💳 Expired subscriptions', 'pending_old': '⏳ Stale pending approvals',
+                  'empty_dirs': '📂 Empty user folders'}
+        for k, v in c.items():
+            if v > 0:
+                parts.append(f"• {labels.get(k, k)}: {v}")
+        parts.append(f"\n**Total removed: {total}**")
+        bot.send_message(chat_id, "\n".join(parts), parse_mode='Markdown')
     except Exception as e:
-        logger.error(f"Error in /cleanup: {e}", exc_info=True)
-        bot.reply_to(message, f"🧹 cleanup problem: {e}")
+        logger.error(f"Cleanup error: {e}", exc_info=True)
+        bot.send_message(chat_id, f"🧹 Cleanup error: {e}")
 
 # --- /reboot (OWNER ONLY) ---
 class _RebootChatId:
@@ -5119,7 +5514,11 @@ BUTTON_TEXT_TO_LOGIC = {
     "🧩 ɪɴꜱᴛᴀʟʟ": _logic_manual_install,
     "❔ ɢᴜɪᴅᴇ": _logic_help,
     "🌐 ᴡᴇʙ ʜᴏꜱᴛ": _logic_web_host,
-    "🌐 ᴍʏ ᴡᴇʙ": _logic_my_websites
+    "🌐 ᴍʏ ᴡᴇʙ": _logic_my_websites,
+    "📋 ᴘᴇɴᴅɪɴɢ": _logic_pending_approvals,
+    "🌐 ᴡᴇʙ ꜱɪᴛᴇꜱ": _logic_web_sites_admin,
+    "📱 ᴡᴀ ʙᴏᴛꜱ": _logic_wa_bots_admin,
+    "🤖 ʙᴏᴛ ꜱᴛᴀᴛᴜꜱ": _logic_bot_status_admin
 }
 
 @bot.message_handler(func=lambda message: message.text in BUTTON_TEXT_TO_LOGIC or message.text in BUTTON_TEXT_TO_LOGIC_EXTRA)
@@ -5842,6 +6241,7 @@ def handle_callbacks(call):
         elif data == 'system_info': admin_required_callback(call, system_info_callback)
         elif data == 'bot_performance': admin_required_callback(call, bot_performance_callback)
         elif data == 'cleanup_files': admin_required_callback(call, cleanup_files_callback)
+        elif data == 'cleanup_confirm': admin_required_callback(call, lambda c: _cleanup_execute(c.message.chat.id))
         elif data == 'install_logs': admin_required_callback(call, install_logs_callback)
         elif data == 'stop_all_scripts': admin_required_callback(call, stop_all_scripts_callback)
         elif data == 'storage_info': admin_required_callback(call, storage_info_callback)
