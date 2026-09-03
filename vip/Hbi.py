@@ -288,18 +288,20 @@ logger = logging.getLogger(__name__)
 COMMAND_BUTTONS_LAYOUT_USER_SPEC = [
     ["⬆️ ᴅᴇᴘʟᴏʏ ʙᴏᴛ", "🗂️ ᴍʏ ʙᴏᴛꜱ"],
     ["🌐 ᴡᴇʙ ʜᴏꜱᴛ", "🌐 ᴍʏ ᴡᴇʙ"],
+    ["📱 ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛ"],
     ["🧩 ɪɴꜱᴛᴀʟʟ", "🌀 ꜱᴘᴇᴇᴅ"],
-    ["📱 ᴡʜᴀᴛꜱᴀᴘᴘ ꜱᴇᴛᴜᴘ", "❔ ɢᴜɪᴅᴇ"],
-    ["📊 ꜱᴛᴀᴛꜱ", "📡 ᴜᴘᴅᴀᴛᴇꜱ"],
+    ["📊 ꜱᴛᴀᴛꜱ", "❔ ɢᴜɪᴅᴇ"],
+    ["📡 ᴜᴘᴅᴀᴛᴇꜱ"],
     ["💬 ᴅᴇᴠᴇʟᴏᴘᴇʀ"]
 ]
 
 ADMIN_COMMAND_BUTTONS_LAYOUT_USER_SPEC = [
     ["⬆️ ᴅᴇᴘʟᴏʏ ʙᴏᴛ", "🗂️ ᴍʏ ʙᴏᴛꜱ"],
     ["🌐 ᴡᴇʙ ʜᴏꜱᴛ", "🌐 ᴍʏ ᴡᴇʙ"],
+    ["📱 ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛ"],
     ["🧩 ɪɴꜱᴛᴀʟʟ", "🌀 ꜱᴘᴇᴇᴅ"],
-    ["📱 ᴡʜᴀᴛꜱᴀᴘᴘ ꜱᴇᴛᴜᴘ", "❔ ɢᴜɪᴅᴇ"],
-    ["📊 ꜱᴛᴀᴛꜱ", "📡 ᴜᴘᴅᴀᴛᴇꜱ"],
+    ["📊 ꜱᴛᴀᴛꜱ", "❔ ɢᴜɪᴅᴇ"],
+    ["📡 ᴜᴘᴅᴀᴛᴇꜱ"],
     ["🛡️ ᴀᴅᴍɪɴ ᴘᴀɴᴇʟ", "💬 ᴅᴇᴠᴇʟᴏᴘᴇʀ"]
 ]
 
@@ -2731,8 +2733,8 @@ def create_reply_keyboard_admin_panel(user_id):
 def create_reply_keyboard_wa_menu(user_id):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     layout = [
-        ["⬆️ ᴡʜ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ", "📱 ᴍʏ ᴡʜᴀᴛꜱᴀᴘᴘ"],
-        ["🧩 ᴡʜ ᴅᴇᴘᴇɴᴅᴇɴᴄʏ", "🌀 ᴡʜ ꜱᴘᴇᴇᴅ"],
+        ["⬆️ ᴡᴘ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ", "📱 ᴍʏ ᴡʜᴀᴛꜱᴀᴘᴘ"],
+        ["🧩 ᴡᴘ ᴅᴇᴘᴇɴᴅᴇɴᴄʏ", "🌀 ᴡᴘ ꜱᴘᴇᴇᴅ"],
         ["🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"]
     ]
     for row_buttons_text in layout:
@@ -3464,11 +3466,11 @@ def _logic_help(message):
         "┃ 🗂️ ᴍᴀɴᴀɢᴇ → ᴍʏ ᴡᴇʙ\n"
         "╰━━━━━━━━━━━━━━━━━━╯\n\n"
         "╭━━━「 📱 ᴡʜᴀᴛꜱᴀᴘᴘ ʜᴏꜱᴛɪɴɢ 」━━━╮\n"
-        "┃ 1️⃣ ᴛᴀᴘ 📱 ᴡʜᴀᴛꜱᴀᴘᴘ ꜱᴇᴛᴜᴘ\n"
-        "┃ 2️⃣ ᴛᴀᴘ ⬆️ ᴡʜ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ\n"
+        "┃ 1️⃣ ᴛᴀᴘ 📱 ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛ\n"
+        "┃ 2️⃣ ᴛᴀᴘ ⬆️ ᴡᴘ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ\n"
         "┃ 3️⃣ ꜱᴇɴᴅ .ᴘʏ · .ᴊꜱ · .ᴢɪᴘ (ᴍᴀx 20ᴍʙ)\n"
         "┃ 4️⃣ 🛡️ ᴀɪ ꜱᴄᴀɴ → ᴀᴅᴍɪɴ ✅ → ᴀᴜᴛᴏ-ꜱᴛᴀʀᴛ ⚡\n"
-        "┃ 🧩 ᴡʜ ᴅᴇᴘᴇɴᴅᴇɴᴄʏ → ʟɪʙʀᴀʀʏ\n"
+        "┃ 🧩 ᴡᴘ ᴅᴇᴘᴇɴᴅᴇɴᴄʏ → ʟɪʙʀᴀʀʏ\n"
         "┃ 📱 ᴍʏ ᴡʜᴀᴛꜱᴀᴘᴘ → ʙᴏᴛꜱ\n"
         "╰━━━━━━━━━━━━━━━━━━╯\n\n"
         "╭━━━「 💎 ꜱʟᴏᴛꜱ & ʟɪᴍɪᴛꜱ 」━━━╮\n"
@@ -4927,11 +4929,11 @@ def command_version(message): _logic_owner_version(message)
 def command_restart(message): _logic_user_restart(message)
 
 # ==================== WHATSAPP HOSTING ====================
-WA_BTN_MAIN = "📱 ᴡʜᴀᴛꜱᴀᴘᴘ ꜱᴇᴛᴜᴘ"
-WA_BTN_UPLOAD = "⬆️ ᴡʜ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ"
+WA_BTN_MAIN = "📱 ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛ"
+WA_BTN_UPLOAD = "⬆️ ᴡᴘ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ"
 WA_BTN_MY = "📱 ᴍʏ ᴡʜᴀᴛꜱᴀᴘᴘ"
-WA_BTN_DEP = "🧩 ᴡʜ ᴅᴇᴘᴇɴᴅᴇɴᴄʏ"
-WA_BTN_SPEED = "🌀 ᴡʜ ꜱᴘᴇᴇᴅ"
+WA_BTN_DEP = "🧩 ᴡᴘ ᴅᴇᴘᴇɴᴅᴇɴᴄʏ"
+WA_BTN_SPEED = "🌀 ᴡᴘ ꜱᴘᴇᴇᴅ"
 WA_BTN_BACK = "🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"
 
 def _logic_wa_main_menu(message):
@@ -4969,7 +4971,7 @@ def _logic_wa_upload(message):
         bot.reply_to(message, f"\U0001F9BA {_t('slots full')} [{current_files}/{limit_str}] \u2014 {_t('remove one or buy subscription')} \u2192 {_t('contact')} {YOUR_USERNAME}")
         return
     wa_sessions[user_id] = True
-    bot.reply_to(message, f"\U0001F3AF ꜱᴇɴᴅ `.py` · `.js` · `.zip` ꜰɪʟᴇ\nᴛɪᴘ: ᴛᴀᴘ ⬆️ ᴡʜ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ ᴛʜᴇɴ ꜱᴇɴᴅ ᴛʜᴇ ꜰɪʟᴇ", parse_mode='Markdown')
+    bot.reply_to(message, f"\U0001F3AF ꜱᴇɴᴅ `.py` · `.js` · `.zip` ꜰɪʟᴇ\nᴛɪᴘ: ᴛᴀᴘ ⬆️ ᴡᴘ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ ᴛʜᴇɴ ꜱᴇɴᴅ ᴛʜᴇ ꜰɪʟᴇ", parse_mode='Markdown')
 
 def _logic_wa_dependency(message):
     user_id = message.from_user.id
@@ -5015,9 +5017,9 @@ def _logic_wa_speed(message):
     try:
         bot.send_chat_action(message.chat.id, 'typing')
         response_time = round((time.time() - start_time_ping) * 1000, 2)
-        speed_msg = ("\U0001F300 ᴡʜ ꜱᴘᴇᴇᴅ ᴛᴇꜱᴛ\n\n"
-                     f"\u23F1 ᴡʜ ᴘɪɴɢ ........... {response_time} ms\n"
-                     f"\U0001F6A6 ᴡʜ ꜱᴇʀᴠᴇʀ ..... online"
+        speed_msg = ("\U0001F300 ᴡᴘ ꜱᴘᴇᴇᴅ ᴛᴇꜱᴛ\n\n"
+                     f"\u23F1 ᴡᴘ ᴘɪɴɢ ........... {response_time} ms\n"
+                     f"\U0001F6A6 ᴡᴘ ꜱᴇʀᴠᴇʀ ..... online"
                      if not bot_locked else "\U0001F528 maintenance")
         bot.edit_message_text(speed_msg, message.chat.id, wait_msg.message_id)
     except Exception as e:
@@ -5411,7 +5413,7 @@ def _wa_run_script(script_path, script_owner_id, user_folder, file_name, message
                         if 'Cannot find module' in stderr:
                             mod_match = re.search(r"Cannot find module '(.+?)'", stderr)
                             if mod_match and attempt+1 <= max_attempts:
-                                bot.reply_to(message_obj, f"\U0001F4A5 WA js module '{mod_match.group(1)}' not found. use 🧩 ᴡʜ ᴅᴇᴘᴇɴᴅᴇɴᴄʏ."); return
+                                bot.reply_to(message_obj, f"\U0001F4A5 WA js module '{mod_match.group(1)}' not found. use 🧩 ᴡᴘ ᴅᴇᴘᴇɴᴅᴇɴᴄʏ."); return
                         bot.reply_to(message_obj, f"⚠️ script error in '{file_name}':\n```\n{stderr[:500]}\n```", parse_mode='Markdown')
                         return
             except subprocess.TimeoutExpired:
@@ -5444,7 +5446,7 @@ def _wa_run_script(script_path, script_owner_id, user_folder, file_name, message
                 'start_time': datetime.now(), 'user_folder': user_folder,
                 'type': ext[1:], 'script_key': script_key, 'wa': True
             }
-            bot.reply_to(message_obj, f"\u2705 ᴡʜ ʙᴏᴛ lɪᴠe! '{file_name}' \u00b7 pid {process.pid}")
+            bot.reply_to(message_obj, f"\u2705 ᴡᴘ ʙᴏᴛ lɪᴠe! '{file_name}' \u00b7 pid {process.pid}")
         except FileNotFoundError:
             logger.error(f"Interpreter missing for WA {script_key}")
             bot.reply_to(message_obj, f"🐍 python missing on host ({sys.executable})!")
