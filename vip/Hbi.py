@@ -158,9 +158,26 @@ os.makedirs(IROTECH_DIR, exist_ok=True)
 bot = telebot.TeleBot(TOKEN)
 
 # --- Global Blockquote Wrapper (har message colored quote me) ---
+def _escape_html_preserve_tags(text):
+    """Escape &, <, > but preserve existing HTML tags and entities."""
+    # First, protect existing HTML entities like &amp; &lt; etc
+    text = re.sub(r'&(?!amp;|lt;|gt;|quot;|#\d+|#x[0-9a-fA-F]+;)', '&amp;', text)
+    # Protect existing tags: replace <...> with placeholder, escape rest, restore
+    tags = []
+    def protect_tag(m):
+        tags.append(m.group(0))
+        return f"\x00TAG{len(tags)-1}\x00"
+    text = re.sub(r'</?[a-zA-Z][^>]*>', protect_tag, text)
+    # Now escape remaining < and >
+    text = text.replace('<', '&lt;').replace('>', '&gt;')
+    # Restore tags
+    for i, tag in enumerate(tags):
+        text = text.replace(f"\x00TAG{i}\x00", tag)
+    return text
+
 def _bq(text):
     t = _bold_sc(str(text))
-    t = t.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    t = _escape_html_preserve_tags(t)
     t = re.sub(r'```(.*?)```', lambda m: '<pre>'+m.group(1)+'</pre>', t, flags=re.S)
     t = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', t, flags=re.S)
     t = re.sub(r'`([^`\n]+)`', r'<code>\1</code>', t)
