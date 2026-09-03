@@ -5917,15 +5917,32 @@ def _wa_process_zip(zip_path, user_id, user_folder, file_name_zip, message):
         items = os.listdir(temp_dir)
         py_files = [f for f in items if f.endswith('.py')]
         js_files = [f for f in items if f.endswith('.js')]
-        req_file = 'requirements.txt' if 'requirements.txt' in items else None
-        if req_file:
-            req_path = os.path.join(temp_dir, req_file)
-            bot.reply_to(message, f"\U0001F9E9 adding python packages from `{req_file}`...")
+        has_package_json = 'package.json' in items
+        has_requirements = 'requirements.txt' in items
+        if has_package_json and js_files:
+            pkg_path = os.path.join(temp_dir, 'package.json')
+            node_modules = os.path.join(temp_dir, 'node_modules')
+            bot.reply_to(message, "📦 installing npm packages from `package.json`...")
+            try:
+                result = subprocess.run(['npm', 'install'], cwd=temp_dir, capture_output=True, text=True, check=True, encoding='utf-8', errors='ignore', timeout=120)
+                bot.reply_to(message, "✅ npm packages ready.")
+            except subprocess.TimeoutExpired:
+                bot.reply_to(message, "⚠️ npm install timed out (120s). Continuing anyway...")
+            except Exception as e:
+                err_msg = str(e)[:400]
+                if 'baileys' in err_msg.lower():
+                    bot.reply_to(message, f"💥 ᴡᴀ ᴊꜱ ᴍᴏᴅᴜʟᴇ 'baileys' ɪɴꜱᴛᴀʟʟ ꜰᴀɪʟᴇᴅ.\n💡 ᴜꜱᴇ 🧩 ᴡᴘ ᴅᴇᴘᴇɴᴅᴇɴᴄʏ ꜰᴏʀ ᴍᴀɴᴜᴀʟ ꜱᴇᴛᴜᴘ.")
+                else:
+                    bot.reply_to(message, f"❌ npm install failed: {err_msg}")
+                return
+        elif has_requirements and py_files:
+            req_path = os.path.join(temp_dir, 'requirements.txt')
+            bot.reply_to(message, f"🧩 adding python packages from `requirements.txt`...")
             try:
                 result = subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', req_path], capture_output=True, text=True, check=True, encoding='utf-8', errors='ignore')
-                bot.reply_to(message, "\u2705 python packages ready.")
+                bot.reply_to(message, "✅ python packages ready.")
             except Exception as e:
-                bot.reply_to(message, f"❌ failed to install deps: {str(e)[:400]}"); return
+                bot.reply_to(message, f"❌ failed to install python deps: {str(e)[:400]}"); return
         main_script_name = None; file_type = None
         preferred_py = ['main.py', 'bot.py', 'app.py', 'index.py']; preferred_js = ['index.js', 'main.js', 'bot.js', 'app.js']
         for p in preferred_py:
