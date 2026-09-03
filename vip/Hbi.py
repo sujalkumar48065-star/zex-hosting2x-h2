@@ -13,7 +13,8 @@
 ║   📱 WhatsApp · 🌐 Web · 🤖 Bot Hosting                     ║
 ║   🔒 AI Security · ⚡ Auto Deploy · 📊 Live Stats            ║
 ║                                                              ║
-║   Made with ❤️ by ZEX Team                                   ║
+║   👑 Owner: @duifioookn2                                    ║
+║   📢 Channel: @MIKKU_ERA | @HISTING2x                       ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
 """
@@ -8111,6 +8112,8 @@ if __name__ == '__main__':
 ╔══════════════════════════════════════════════╗
 ║   🤖 ZEX HOSTING BOT v2.0                   ║
 ║   🛡️ Secure · Fast · Reliable               ║
+║   👑 Owner: @duifioookn2                     ║
+║   📢 @MIKKU_ERA | @HISTING2x                ║
 ╚══════════════════════════════════════════════╝
 """
     logger.info(banner)
