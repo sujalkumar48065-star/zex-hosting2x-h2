@@ -201,8 +201,9 @@ def _public_base_url() -> str:
     (no manual PUBLIC_BASE_URL needed), then explicit overrides. Returns '' when
     no URL is resolvable."""
     rext = (os.environ.get('RENDER_EXTERNAL_URL') or os.environ.get('RENDER_EXTERNAL_HOSTNAME') or '')
+    railway = os.environ.get('RAILWAY_PUBLIC_DOMAIN') or os.environ.get('RAILWAY_STATIC_URL') or ''
     manual = (os.environ.get('PUBLIC_BASE_URL') or os.environ.get('HOST_URL') or '')
-    base = rext or manual
+    base = rext or railway or manual
     base = base.strip()
     if not base:
         return ''
