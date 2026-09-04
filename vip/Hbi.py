@@ -537,7 +537,7 @@ class AISecurityAnalyzer:
              r'\\x[0-9a-fA-F]{2}(\\x[0-9a-fA-F]{2}){5,}', r'chr\s*\(\s*\d+\s*\)\s*\+.*chr\s*\(',
              r'compile\s*\(\s*[\'\"]\\x', r'__import__\s*\(\s*[\'\"]base64']),
         ("whatsapp_session", 50, "📱 ᴡʜᴀᴛꜱᴀᴘᴘ ꜱᴇꜱꜱɪᴏɴ ʜɪᴊᴀᴄᴋɪɴɢ",
-            [r'whatsapp-webjs|whatsapp-web\.js', r'@whiskeysockets/baileys', r'session\.decode',
+            [r'whatsapp-webjs|whatsapp-web\.js', r'session\.decode',
              r'creds\.json', r'WASessionStore', r'whatsapp-web:\s*.*client',
              r'puppeteer.{0,50}whatsapp', r'webwhatsapp|web\.whatsapp']),
         ("web_xss", 40, "🌐 ᴡᴇʙ ᴄʀᴏꜱꜱ-ꜱɪᴛᴇ ꜱᴄʀɪᴘᴛɪɴɢ (XSS)",
@@ -3893,7 +3893,7 @@ def _logic_wa_bots_admin(message):
         parts.append(f"▶️ Running: {running_count}")
         for sk, info in list(wa_bot_scripts.items())[:10]:
             fn = info.get('file_name', '?')
-            uid = info.get('owner_id', '?')
+            uid = info.get('script_owner_id', '?')
             parts.append(f"  • `{fn}` (user `{uid}`)")
     else:
         parts.append("▶️ Running: 0")
@@ -4424,26 +4424,26 @@ def _perform_hosting_cleanup():
                 except Exception:
                     pass
 
-    # 3. Clean inactive user bot files (30+ days, not running)
+    # 3. Clean inactive user bot files (90+ days, not running)
     for uid, files in list(user_files.items()):
         for fname, ftype in list(files):
             if not is_bot_running(uid, fname):
                 fp = os.path.join(get_user_folder(uid), fname)
                 try:
-                    if os.path.exists(fp) and time.time() - os.path.getmtime(fp) > 30 * 86400:
+                    if os.path.exists(fp) and time.time() - os.path.getmtime(fp) > 90 * 86400:
                         os.remove(fp)
                         c['user_files'] += 1
                 except Exception:
                     pass
 
-    # 4. Clean inactive WA files (30+ days, not running)
+    # 4. Clean inactive WA files (90+ days, not running)
     for uid, files in list(wa_user_files.items()):
         for fname, ftype in list(files):
             sk = f"{uid}_{fname}"
             if sk not in wa_bot_scripts:
-                fp = os.path.join(get_user_folder(uid), 'wa', fname)
+                fp = os.path.join(get_wa_user_folder(uid), fname)
                 try:
-                    if os.path.exists(fp) and time.time() - os.path.getmtime(fp) > 30 * 86400:
+                    if os.path.exists(fp) and time.time() - os.path.getmtime(fp) > 90 * 86400:
                         os.remove(fp)
                         c['wa_files'] += 1
                 except Exception:
@@ -4582,9 +4582,24 @@ def _snapshot_running_scripts():
                     'user_folder': info.get('user_folder'),
                     'type': info.get('type'),
                     'chat_id': info.get('chat_id'),
+                    'is_wa': False,
                 })
         except Exception as e:
             logger.error(f"Reboot snapshot error for {key}: {e}")
+    for key, info in list(wa_bot_scripts.items()):
+        try:
+            proc = psutil.Process(info['process'].pid)
+            if proc.is_running() and proc.status() != psutil.STATUS_ZOMBIE:
+                snapshot.append({
+                    'script_owner_id': info.get('script_owner_id'),
+                    'file_name': info.get('file_name'),
+                    'user_folder': info.get('user_folder'),
+                    'type': info.get('type'),
+                    'chat_id': info.get('chat_id'),
+                    'is_wa': True,
+                })
+        except Exception as e:
+            logger.error(f"Reboot snapshot WA error for {key}: {e}")
     try:
         with open(REBOOT_STATE_PATH, 'w', encoding='utf-8') as f:
             json.dump(snapshot, f)
@@ -4603,6 +4618,15 @@ def _stop_all_scripts():
             except Exception as e:
                 logger.error(f"Reboot: error stopping {key}: {e}")
             bot_scripts.pop(key, None)
+    for key in list(wa_bot_scripts.keys()):
+        info = wa_bot_scripts.get(key)
+        if info:
+            try:
+                kill_process_tree(info)
+                stopped += 1
+            except Exception as e:
+                logger.error(f"Reboot: error stopping WA {key}: {e}")
+            wa_bot_scripts.pop(key, None)
     return stopped
 
 def _restore_after_reboot():
@@ -4621,16 +4645,26 @@ def _restore_after_reboot():
         try:
             owner_id = int(item.get('script_owner_id', 0))
             file_name = item.get('file_name')
-            user_folder = item.get('user_folder') or get_user_folder(owner_id)
+            is_wa = item.get('is_wa', False)
+            if is_wa:
+                user_folder = item.get('user_folder') or get_wa_user_folder(owner_id)
+            else:
+                user_folder = item.get('user_folder') or get_user_folder(owner_id)
             file_type = item.get('type', 'py')
             file_path = os.path.join(user_folder, file_name) if file_name else None
             if not file_name or not os.path.exists(file_path):
-                logger.warning(f"Reboot restore: skipping missing '{file_name}'")
+                logger.warning(f"Reboot restore: skipping missing '{file_name}' (wa={is_wa})")
                 continue
-            if is_bot_running(owner_id, file_name):
-                continue
+            if is_wa:
+                if f"{owner_id}_{file_name}" in wa_bot_scripts:
+                    continue
+            else:
+                if is_bot_running(owner_id, file_name):
+                    continue
             reply_obj = _RebootReplyMsg(item.get('chat_id') or OWNER_ID)
-            if file_type == 'js':
+            if is_wa:
+                threading.Thread(target=_wa_run_script, args=(file_path, owner_id, user_folder, file_name, reply_obj)).start()
+            elif file_type == 'js':
                 threading.Thread(target=run_js_script, args=(file_path, owner_id, user_folder, file_name, reply_obj)).start()
             else:
                 threading.Thread(target=run_script, args=(file_path, owner_id, user_folder, file_name, reply_obj)).start()
@@ -5913,6 +5947,7 @@ def _wa_run_script(script_path, script_owner_id, user_folder, file_name, message
             kill_process_tree(wa_bot_scripts[script_key]); del wa_bot_scripts[script_key]
 
 def _wa_process_zip(zip_path, user_id, user_folder, file_name_zip, message):
+    temp_dir = None
     try:
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
             temp_dir = tempfile.mkdtemp(prefix=f"user_{user_id}_wa_zip_proc_")
@@ -5971,11 +6006,13 @@ def _wa_process_zip(zip_path, user_id, user_folder, file_name_zip, message):
         main_script_path = os.path.join(user_folder, main_script_name)
         bot.reply_to(message, f"\U0001F5C2\uFE0F unpacked! launching `{main_script_name}`...", parse_mode='Markdown')
         threading.Thread(target=_wa_run_script, args=(main_script_path, user_id, user_folder, main_script_name, message)).start()
-        try: shutil.rmtree(temp_dir, ignore_errors=True)
-        except Exception: pass
     except Exception as e:
         logger.error(f"WA zip process error: {e}", exc_info=True)
         bot.reply_to(message, f"\U0001F4A5 zip problem: {e}")
+    finally:
+        if temp_dir and os.path.exists(temp_dir):
+            try: shutil.rmtree(temp_dir, ignore_errors=True)
+            except Exception: pass
 
 def _wa_start_script(script_path, script_owner_id, user_folder, file_name, message):
     ext = os.path.splitext(file_name)[1].lower()
@@ -6010,6 +6047,10 @@ def process_wa_reject_file(call):
     if os.path.exists(file_path):
         try: os.remove(file_path)
         except Exception as e: logger.error(f"Error deleting rejected WA file: {e}")
+    # Remove from wa_user_files so slot is freed
+    if user_id in wa_user_files:
+        wa_user_files[user_id] = [(f, t) for f, t in wa_user_files[user_id] if f != file_name]
+        _save_wa_manifest()
     bot.answer_callback_query(call.id, "❌ File rejected!")
     bot.edit_message_text(f"❌ WA file `{file_name}` rejected for user `{user_id}`", call.message.chat.id, call.message.message_id)
     try: bot.send_message(user_id, f"❌ Your WA file `{file_name}` has been rejected for security reasons.")
@@ -7309,6 +7350,12 @@ def process_ban_user(message):
                 if script_key in bot_scripts:
                     kill_process_tree(bot_scripts[script_key])
                     del bot_scripts[script_key]
+            # Stop WA bots for banned user
+            for file_name, _ in wa_user_files.get(user_id, []):
+                script_key = f"{user_id}_{file_name}"
+                if script_key in wa_bot_scripts:
+                    kill_process_tree(wa_bot_scripts[script_key])
+                    del wa_bot_scripts[script_key]
             
             try:
                 bot.send_message(user_id, f"⛔ you're restricted from this bot.\nreason: {reason}")
