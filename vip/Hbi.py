@@ -147,6 +147,13 @@ YOUR_USERNAME = '@duifioookn2'
 UPDATE_CHANNEL = 'https://t.me/MIKKU_ERA'
 NETLIFY_TOKEN = os.environ.get('NETLIFY_TOKEN', 'nfp_CgbbQNg4VSdyTTBVPQcF95w1rhiESKJn2917')
 
+# --- Cloudflare Telegram API Proxy ---
+TELEGRAM_API_URL = os.environ.get('TELEGRAM_API_URL', '')
+if TELEGRAM_API_URL:
+    import telebot.apihelper
+    telebot.apihelper.API_URL = TELEGRAM_API_URL + "/bot{0}/{1}"
+    telebot.apihelper.FILE_URL = TELEGRAM_API_URL + "/file/bot{0}/{1}"
+
 # --- GROK AI SECURITY KEYS (3 failover: 1 fail -> 2 -> 3) ---
 GROK_KEYS = [
     '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',
