@@ -295,6 +295,20 @@ bot_locked = False
 pending_modules = {}  # {user_id: {module_name: package_name}}
 manual_install_requests = {}  # {admin_id: {user_id: {module_name: package_name}}}
 
+# --- Admin step attempt limits ---
+_step_attempts = {}  # {user_id: count}
+_STEP_MAX_ATTEMPTS = 3
+
+def _step_bump(uid):
+    _step_attempts[uid] = _step_attempts.get(uid, 0) + 1
+    if _step_attempts[uid] > _STEP_MAX_ATTEMPTS:
+        _step_attempts.pop(uid, None)
+        return True
+    return False
+
+def _step_reset(uid):
+    _step_attempts.pop(uid, None)
+
 # --- Mandatory Channels/Groups ---
 mandatory_channels = {}  # {channel_id: {'username': 'channel_username', 'name': 'Channel Name'}}
 
@@ -5381,7 +5395,7 @@ def _logic_gh_web_link(message):
 # --- Command Handlers & Text Handlers for ReplyKeyboard ---
 @bot.message_handler(commands=['start', 'help'])
 def command_send_welcome(message): 
-    if message.text == '/help':
+    if message.text and message.text.startswith('/help'):
         _logic_help(message)
     else:
         _logic_send_welcome(message)
@@ -5605,7 +5619,7 @@ def command_bot_speed(message): _logic_bot_speed(message)
 def command_contact_owner(message): _logic_contact_owner(message)
 @bot.message_handler(commands=['subscriptions'])
 def command_subscriptions(message): _logic_subscriptions_panel(message)
-@bot.message_handler(commands=['𝐒ᴛᴀᴛɪꜱᴛɪᴄꜱ']) # Alias for /status
+@bot.message_handler(commands=['statistics']) # Alias for /status
 def command_statistics(message): _logic_statistics(message)
 @bot.message_handler(commands=['broadcast'])
 def command_broadcast(message): _logic_broadcast_init(message)
