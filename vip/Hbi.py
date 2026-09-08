@@ -42,6 +42,10 @@ import atexit
 import requests
 import threading
 import re
+_LILM_NORMAL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+_LILM_CUTE   = "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀꜱᴛᴜᴠᴡxʏᴢᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀꜱᴛᴜᴠᴡxʏᴢ"
+_LILM_TRANS  = str.maketrans(_LILM_NORMAL, _LILM_CUTE)
+
 def lilm_font(text):
     if not isinstance(text, str):
         return text
@@ -51,33 +55,23 @@ def lilm_font(text):
     cmds  = re.findall(r'/\w+', text)
     html_tags = re.findall(r'</?[a-zA-Z][^>]*>', text)
 
-    # placeholders: control chars + digits only (letters would get font-mangled)
     for i, l in enumerate(links):
         text = text.replace(l, f"\x01{1000 + i}\x02", 1)
-
     for i, u in enumerate(users):
         text = text.replace(u, f"\x01{2000 + i}\x02", 1)
-
     for i, c in enumerate(cmds):
         text = text.replace(c, f"\x01{3000 + i}\x02", 1)
-
     for i, h in enumerate(html_tags):
         text = text.replace(h, f"\x01{4000 + i}\x02", 1)
 
-    normal = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-    cute   = "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀꜱᴛᴜᴠᴡxʏᴢᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀꜱᴛᴜᴠᴡxʏᴢ"
-
-    text = text.translate(str.maketrans(normal, cute))
+    text = text.translate(_LILM_TRANS)
 
     for i, l in enumerate(links):
         text = text.replace(f"\x01{1000 + i}\x02", l)
-
     for i, u in enumerate(users):
         text = text.replace(f"\x01{2000 + i}\x02", u)
-
     for i, c in enumerate(cmds):
         text = text.replace(f"\x01{3000 + i}\x02", c)
-
     for i, h in enumerate(html_tags):
         text = text.replace(f"\x01{4000 + i}\x02", h)
 
@@ -217,35 +211,26 @@ def _bq(text):
     return '<blockquote>' + t + '</blockquote>'
 
 _orig_send_message = bot.send_message
-def _quoted_send_message(*args, **kwargs):
-    if len(args) >= 2:
-        args = (args[0], _bq(args[1])) + args[2:]
-    elif 'text' in kwargs:
-        kwargs['text'] = _bq(kwargs['text'])
+def _final_send_message(*args, **kwargs):
+    if len(args) >= 2 and isinstance(args[1], str):
+        args = (args[0], lilm_font(_bq(args[1]))) + args[2:]
+    elif 'text' in kwargs and isinstance(kwargs['text'], str):
+        kwargs['text'] = lilm_font(_bq(kwargs['text']))
     kwargs['parse_mode'] = 'HTML'
     return _orig_send_message(*args, **kwargs)
-bot.send_message = _quoted_send_message
+bot.send_message = _final_send_message
 
 _orig_edit_message_text = bot.edit_message_text
-def _quoted_edit_message_text(*args, **kwargs):
+def _final_edit_message_text(*args, **kwargs):
     if len(args) >= 1 and isinstance(args[0], str):
-        args = (_bq(args[0]),) + args[1:]
-    elif 'text' in kwargs:
-        kwargs['text'] = _bq(kwargs['text'])
+        args = (lilm_font(_bq(args[0])),) + args[1:]
+    elif 'text' in kwargs and isinstance(kwargs['text'], str):
+        kwargs['text'] = lilm_font(_bq(kwargs['text']))
     kwargs['parse_mode'] = 'HTML'
     return _orig_edit_message_text(*args, **kwargs)
-bot.edit_message_text = _quoted_edit_message_text
+bot.edit_message_text = _final_edit_message_text
 # --- End Global Blockquote Wrapper ---
-telebot.apihelper.TIMEOUT = 120
-# 👇 FINAL LAYER PATCH
-original_send = bot.send_message
-
-def send_message(chat_id, text, *args, **kwargs):
-    if isinstance(text, str):
-        text = lilm_font(text)
-    return original_send(chat_id, text, *args, **kwargs)
-
-bot.send_message = send_message
+telebot.apihelper.TIMEOUT = 15
 
 def _err_digest(scope, data, uid, exc, extra=""):
     """Report any handler error straight to the owner so nothing fails silently."""
