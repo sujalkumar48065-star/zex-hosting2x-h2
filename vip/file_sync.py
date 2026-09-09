@@ -179,6 +179,7 @@ def sync_once(base_dir):
     """One pass: upsert changed files, delete rows for removed files."""
     entries = _walk_files(base_dir)
     disk = {}
+    n = 0
     conn = _connect_retry()
     try:
         # load lightweight index
