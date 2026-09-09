@@ -2634,7 +2634,7 @@ def _sandbox_preexec(user_folder=None):
     def _apply():
         try:
             import resource as _res
-            lim = {'as': 512*1024*1024, 'cpu': 3600, 'nproc': 24, 'fsize': 200*1024*1024}
+            lim = {'as': 512*1024*1024, 'cpu': 7200, 'nproc': 24, 'fsize': 200*1024*1024}
             _res.setrlimit(_res.RLIMIT_AS,   (lim['as'],   lim['as']))
             _res.setrlimit(_res.RLIMIT_CPU,  (lim['cpu'],  lim['cpu']))
             _res.setrlimit(_res.RLIMIT_NPROC,(lim['nproc'],lim['nproc']))
@@ -3123,7 +3123,7 @@ def run_script(script_path, script_owner_id, user_folder, file_name, message_obj
             check_proc = None
             try:
                 check_proc = subprocess.Popen(check_command, cwd=user_folder, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='ignore')
-                stdout, stderr = check_proc.communicate(timeout=5)
+                stdout, stderr = check_proc.communicate(timeout=10)
                 return_code = check_proc.returncode
                 logger.info(f"Python Pre-check early. RC: {return_code}. Stderr: {stderr[:200]}...")
                 if return_code != 0 and stderr:
@@ -3237,7 +3237,7 @@ def run_js_script(script_path, script_owner_id, user_folder, file_name, message_
             check_proc = None
             try:
                 check_proc = subprocess.Popen(check_command, cwd=user_folder, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='ignore')
-                stdout, stderr = check_proc.communicate(timeout=5)
+                stdout, stderr = check_proc.communicate(timeout=10)
                 return_code = check_proc.returncode
                 logger.info(f"JS Pre-check early. RC: {return_code}. Stderr: {stderr[:200]}...")
                 if return_code != 0 and stderr:
@@ -5875,7 +5875,7 @@ def _wa_run_script(script_path, script_owner_id, user_folder, file_name, message
             check_proc = None
             try:
                 check_proc = subprocess.Popen(check_command, cwd=user_folder, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='ignore')
-                stdout, stderr = check_proc.communicate(timeout=5)
+                stdout, stderr = check_proc.communicate(timeout=10)
                 if check_proc.returncode != 0 and stderr:
                     if ext == '.py':
                         match_py = re.search(r"ModuleNotFoundError: No module named '(.+?)'", stderr)
@@ -8148,6 +8148,82 @@ def process_reject_gh(call):
         except Exception as e:
             logger.error(f"gh reject notify err: {e}")
 
+# --- Auto-Restart Watchdog ---
+_restart_counts = {}
+_MAX_RESTARTS = 3
+
+def _watchdog_loop():
+    """Monitor running bots and auto-restart crashed ones."""
+    while True:
+        time.sleep(30)
+        for key, info in list(bot_scripts.items()):
+            try:
+                proc = info.get('process')
+                if not proc or not hasattr(proc, 'pid'):
+                    continue
+                p = psutil.Process(proc.pid)
+                if not p.is_running() or p.status() == psutil.STATUS_ZOMBIE:
+                    restarts = _restart_counts.get(key, 0)
+                    if restarts >= _MAX_RESTARTS:
+                        logger.warning(f"Watchdog: {key} exceeded max restarts ({_MAX_RESTARTS}). Not restarting.")
+                        bot_scripts.pop(key, None)
+                        _restart_counts.pop(key, None)
+                        continue
+                    _restart_counts[key] = restarts + 1
+                    owner_id = info.get('script_owner_id')
+                    file_name = info.get('file_name')
+                    user_folder = info.get('user_folder')
+                    chat_id = info.get('chat_id')
+                    file_type = info.get('type', 'py')
+                    if not owner_id or not file_name or not user_folder:
+                        bot_scripts.pop(key, None)
+                        continue
+                    fp = os.path.join(user_folder, file_name)
+                    if not os.path.exists(fp):
+                        bot_scripts.pop(key, None)
+                        continue
+                    logger.info(f"Watchdog: restarting {key} (attempt {restarts+1}/{_MAX_RESTARTS})")
+                    reply_obj = _RebootReplyMsg(chat_id or OWNER_ID)
+                    if file_type == 'js':
+                        threading.Thread(target=run_js_script, args=(fp, owner_id, user_folder, file_name, reply_obj), daemon=True).start()
+                    else:
+                        threading.Thread(target=run_script, args=(fp, owner_id, user_folder, file_name, reply_obj), daemon=True).start()
+            except psutil.NoSuchProcess:
+                bot_scripts.pop(key, None)
+                _restart_counts.pop(key, None)
+            except Exception as e:
+                logger.error(f"Watchdog error for {key}: {e}")
+        for key, info in list(wa_bot_scripts.items()):
+            try:
+                proc = info.get('process')
+                if not proc or not hasattr(proc, 'pid'):
+                    continue
+                p = psutil.Process(proc.pid)
+                if not p.is_running() or p.status() == psutil.STATUS_ZOMBIE:
+                    restarts = _restart_counts.get(key, 0)
+                    if restarts >= _MAX_RESTARTS:
+                        wa_bot_scripts.pop(key, None)
+                        _restart_counts.pop(key, None)
+                        continue
+                    _restart_counts[key] = restarts + 1
+                    owner_id = info.get('script_owner_id')
+                    file_name = info.get('file_name')
+                    user_folder = info.get('user_folder')
+                    chat_id = info.get('chat_id')
+                    file_type = info.get('type', 'py')
+                    fp = os.path.join(user_folder, file_name) if owner_id and file_name else None
+                    if not fp or not os.path.exists(fp):
+                        wa_bot_scripts.pop(key, None)
+                        continue
+                    logger.info(f"Watchdog: restarting WA {key} (attempt {restarts+1}/{_MAX_RESTARTS})")
+                    reply_obj = _RebootReplyMsg(chat_id or OWNER_ID)
+                    threading.Thread(target=_wa_run_script, args=(fp, owner_id, user_folder, file_name, reply_obj), daemon=True).start()
+            except psutil.NoSuchProcess:
+                wa_bot_scripts.pop(key, None)
+                _restart_counts.pop(key, None)
+            except Exception as e:
+                logger.error(f"Watchdog WA error for {key}: {e}")
+
 # --- Cleanup Function ---
 def cleanup():
     logger.warning("Shutdown. Cleaning up processes...")
@@ -8201,6 +8277,11 @@ if __name__ == '__main__':
         threading.Thread(target=_restore_after_reboot, daemon=True).start()
     except Exception as e:
         logger.error(f"Failed to start reboot restore thread: {e}")
+    try:
+        threading.Thread(target=_watchdog_loop, daemon=True).start()
+        logger.info("🐕 Watchdog started (auto-restart crashed bots)")
+    except Exception as e:
+        logger.error(f"Failed to start watchdog: {e}")
     while True:
         try:
             bot.infinity_polling(logger_level=logging.INFO, timeout=60, long_polling_timeout=30)
