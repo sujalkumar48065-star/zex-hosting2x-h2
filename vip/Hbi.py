@@ -6926,7 +6926,8 @@ def apk_approve_callback(call):
     uid = ent['uid']
     build_folder = _apk_build_app(key)
     if not build_folder:
-        bot.answer_callback_query(call.id, "\u274C build failed", show_alert=True)
+        _apk_refund(uid)
+        bot.answer_callback_query(call.id, "\u274C build failed \u2014 credit refunded", show_alert=True)
         return
     apk_manifest[key]['status'] = 'approved'
     _save_apk_manifest()
