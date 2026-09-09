@@ -319,6 +319,14 @@ wa_user_files = {}        # {user_id: [(file_name, file_type)]}
 wa_pending_zip_files = {} # {user_id: {file_name: file_content}} pending admin decision
 WA_UPLOAD_BOTS_DIR = os.path.join(BASE_DIR, 'wa_uploads')
 
+# --- APK Development State ---
+apk_sessions = {}      # {user_id: {'stage': 'html'|'css'|'js'|'name'|'logo', 'html': bytes, 'css': bytes, 'js': bytes, 'name': str, 'logo': bytes}}
+apk_pending = {}       # {key: {uid, html, css, js, name, logo, created}} waiting for admin
+apk_manifest = {}      # {key: {uid, name, status, created, apk_path, credits_used, reason}}
+_apk_counter = [0]
+APK_DIR = os.path.join(BASE_DIR, 'apk_builds')
+APK_CREDITS = 1  # free user gets 1 credit
+
 # --- Security Settings ---
 SECURITY_CONFIG = {
     'blocked_modules': ['os.system', 'os', 'zipfile', 'subprocess.Popen', 'subprocess', 'eval', 'exec','compile', '__import__'],
@@ -338,6 +346,7 @@ COMMAND_BUTTONS_LAYOUT_USER_SPEC = [
     ["⬆️ ᴅᴇᴘʟᴏʏ ʙᴏᴛ", "🗂️ ᴍʏ ʙᴏᴛꜱ"],
     ["🌐 ᴡᴇʙ ʜᴏꜱᴛ", "🌐 ᴍʏ ᴡᴇʙ"],
     ["📱 ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛ"],
+    ["📱 ᴀᴘᴋ ᴅᴇᴠᴇʟᴏᴘᴍᴇɴᴛ"],
     ["🧩 ɪɴꜱᴛᴀʟʟ", "🌀 ꜱᴘᴇᴇᴅ"],
     ["📊 ꜱᴛᴀᴛꜱ", "❔ ɢᴜɪᴅᴇ"],
     ["📡 ᴜᴘᴅᴀᴛᴇꜱ"],
@@ -348,6 +357,7 @@ ADMIN_COMMAND_BUTTONS_LAYOUT_USER_SPEC = [
     ["⬆️ ᴅᴇᴘʟᴏʏ ʙᴏᴛ", "🗂️ ᴍʏ ʙᴏᴛꜱ"],
     ["🌐 ᴡᴇʙ ʜᴏꜱᴛ", "🌐 ᴍʏ ᴡᴇʙ"],
     ["📱 ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛ"],
+    ["📱 ᴀᴘᴋ ᴅᴇᴠᴇʟᴏᴘᴍᴇɴᴛ"],
     ["🧩 ɪɴꜱᴛᴀʟʟ", "🌀 ꜱᴘᴇᴇᴅ"],
     ["📊 ꜱᴛᴀᴛꜱ", "❔ ɢᴜɪᴅᴇ"],
     ["📡 ᴜᴘᴅᴀᴛᴇꜱ"],
@@ -2666,19 +2676,21 @@ def _clean_env_for(user_folder):
     return env
 
 _upload_times = {}
+_upload_times_lock = threading.Lock()
 UPLOAD_RATE_LIMIT = (6, 600)
 
 def _rate_ok(user_id):
     """Max UPLOAD_RATE_LIMIT[0] uploads per UPLOAD_RATE_LIMIT[1] sec."""
     import time as _t
     now = _t.time()
-    win = _upload_times.get(user_id, [])
-    win = [t for t in win if now - t < UPLOAD_RATE_LIMIT[1]]
-    if len(win) >= UPLOAD_RATE_LIMIT[0]:
-        return False
-    win.append(now)
-    _upload_times[user_id] = win
-    return True
+    with _upload_times_lock:
+        win = _upload_times.get(user_id, [])
+        win = [t for t in win if now - t < UPLOAD_RATE_LIMIT[1]]
+        if len(win) >= UPLOAD_RATE_LIMIT[0]:
+            return False
+        win.append(now)
+        _upload_times[user_id] = win
+        return True
 
 def _touch_user(user_id):
     """Register any interacting user instantly (fixes stale member count)."""
@@ -2781,6 +2793,7 @@ def create_main_menu_inline(user_id):
         markup.add(buttons[4], buttons[3])
         markup.add(types.InlineKeyboardButton('🌐 ᴡᴇʙ ʜᴏꜱᴛ', callback_data='web_host'),
                    types.InlineKeyboardButton('🌐 ᴍʏ ᴡᴇʙ', callback_data='my_websites'))
+        markup.add(types.InlineKeyboardButton('📱 ᴀᴘᴋ ᴅᴇᴠᴇʟᴏᴘᴍᴇɴᴛ', callback_data='apk_dev'))
         markup.add(admin_buttons[1], admin_buttons[0])
         markup.add(admin_buttons[3], admin_buttons[5])
         markup.add(admin_buttons[2], admin_buttons[7])
@@ -2793,6 +2806,7 @@ def create_main_menu_inline(user_id):
         markup.add(buttons[4], buttons[3])
         markup.add(types.InlineKeyboardButton('🌐 ᴡᴇʙ ʜᴏꜱᴛ', callback_data='web_host'),
                    types.InlineKeyboardButton('🌐 ᴍʏ ᴡᴇʙ', callback_data='my_websites'))
+        markup.add(types.InlineKeyboardButton('📱 ᴀᴘᴋ ᴅᴇᴠᴇʟᴏᴘᴍᴇɴᴛ', callback_data='apk_dev'))
         markup.add(types.InlineKeyboardButton('📊 ꜱᴛᴀᴛꜱ', callback_data='stats'))
         markup.add(buttons[0])
         markup.add(buttons[5])
@@ -4288,32 +4302,32 @@ def _cleanup_preview():
     if counts['user_logs']:
         items.append(f"📋 {counts['user_logs']} old log file(s) (7+ days)")
 
-    # 3. User bot files not running and inactive 30+ days
+    # 3. User bot files not running and inactive 90+ days
     for uid, files in list(user_files.items()):
         for fname, ftype in files:
             if not is_bot_running(uid, fname):
                 fp = os.path.join(get_user_folder(uid), fname)
                 try:
-                    if os.path.exists(fp) and time.time() - os.path.getmtime(fp) > 30 * 86400:
+                    if os.path.exists(fp) and time.time() - os.path.getmtime(fp) > 90 * 86400:
                         counts['user_files'] += 1
                 except Exception:
                     pass
     if counts['user_files']:
-        items.append(f"🤖 {counts['user_files']} inactive bot file(s) (30+ days)")
+        items.append(f"🤖 {counts['user_files']} inactive bot file(s) (90+ days)")
 
     # 4. WA bot files not running
     for uid, files in list(wa_user_files.items()):
         for fname, ftype in files:
             sk = f"{uid}_{fname}"
             if sk not in wa_bot_scripts:
-                fp = os.path.join(get_user_folder(uid), 'wa', fname)
+                fp = os.path.join(get_wa_user_folder(uid), fname)
                 try:
-                    if os.path.exists(fp) and time.time() - os.path.getmtime(fp) > 30 * 86400:
+                    if os.path.exists(fp) and time.time() - os.path.getmtime(fp) > 90 * 86400:
                         counts['wa_files'] += 1
                 except Exception:
                     pass
     if counts['wa_files']:
-        items.append(f"📱 {counts['wa_files']} inactive WA file(s) (30+ days)")
+        items.append(f"📱 {counts['wa_files']} inactive WA file(s) (90+ days)")
 
     # 5. Stale web dirs (no manifest entry)
     try:
@@ -5009,6 +5023,41 @@ def _logic_web_host(message):
         "\U0001F4CC "+_t("main page must be named")+" index.html")
 
 @bot.message_handler(content_types=['document'])
+def _apk_doc_catcher(message):
+    """Catch file uploads for APK Development."""
+    uid = message.from_user.id
+    sess = apk_sessions.get(uid)
+    if not sess or sess.get('stage') != 'html':
+        return False  # fall through to other handlers
+    if is_user_banned(uid):
+        bot.reply_to(message, "⛔ your account is restricted from this bot.")
+        apk_sessions.pop(uid, None)
+        return True
+    doc = message.document
+    if not doc:
+        return False
+    fname = doc.file_name or ''
+    ext = os.path.splitext(fname)[1].lower()
+    if ext not in ('.html', '.htm', '.zip'):
+        bot.reply_to(message, "❌ Only .html or .zip files allowed")
+        apk_sessions.pop(uid, None)
+        return True
+    if doc.file_size and doc.file_size > 10 * 1024 * 1024:
+        bot.reply_to(message, "🐋 File too big — max 10 MB")
+        apk_sessions.pop(uid, None)
+        return True
+    try:
+        file_info = bot.get_file(doc.file_id)
+        content = bot.download_file(file_info.file_path)
+    except Exception as e:
+        bot.reply_to(message, f"❌ download failed: {e}")
+        apk_sessions.pop(uid, None)
+        return True
+    apk_sessions[uid] = {'stage': 'name', 'html': content, 'fname': fname, 'ftype': ext[1:]}
+    bot.reply_to(message, f"✅ File received: {fname}\n\n✍️ Send app name (e.g., MyGame)")
+    return True
+
+@bot.message_handler(content_types=['document'])
 def _web_doc_catcher(message):
     uid = message.from_user.id
     sess = web_sessions.get(uid)
@@ -5041,6 +5090,77 @@ def _web_doc_catcher(message):
         "✍️ "+_t("now send a name for your site")+"\n"
         "("+_t("letters & numbers only")+")\n\n"
         "⏳ "+_t("link will be shown after admin approval"))
+
+@bot.message_handler(func=lambda m: m.from_user.id in apk_sessions and apk_sessions[m.from_user.id].get('stage') == 'name')
+def _apk_name_catcher(message):
+    """Catch app name input for APK Development."""
+    uid = message.from_user.id
+    sess = apk_sessions.get(uid)
+    if not sess:
+        return False
+    if (message.text or '').startswith('/cancel'):
+        apk_sessions.pop(uid, None)
+        bot.reply_to(message, "✖️ Cancelled.", reply_markup=create_reply_keyboard_main_menu(uid))
+        return True
+    name = (message.text or '').strip()
+    if not name or len(name) < 3 or len(name) > 30:
+        bot.reply_to(message, "❌ Name must be 3-30 characters")
+        return True
+    if not re.match(r'^[a-zA-Z0-9_]+$', name):
+        bot.reply_to(message, "❌ Only letters, numbers, underscore allowed")
+        return True
+    apk_sessions[uid]['name'] = name
+    apk_sessions[uid]['stage'] = 'logo'
+    bot.reply_to(message, f"✅ Name: {name}\n\n📤 Upload app logo (square PNG)")
+    return True
+
+@bot.message_handler(content_types=['photo'])
+def _apk_logo_catcher(message):
+    """Catch logo upload for APK Development."""
+    uid = message.from_user.id
+    sess = apk_sessions.get(uid)
+    if not sess or sess.get('stage') != 'logo':
+        return False
+    if is_user_banned(uid):
+        bot.reply_to(message, "⛔ your account is restricted from this bot.")
+        apk_sessions.pop(uid, None)
+        return True
+    try:
+        photo = message.photo[-1]  # largest photo
+        file_info = bot.get_file(photo.file_id)
+        logo = bot.download_file(file_info.file_path)
+    except Exception as e:
+        bot.reply_to(message, f"❌ download failed: {e}")
+        return True
+    apk_sessions[uid]['logo'] = logo
+    apk_sessions[uid]['stage'] = 'review'
+    sess = apk_sessions[uid]
+    txt = (f"╔═══「 📱 APK Summary 」═══╗\n"
+           f"┃\n"
+           f"┃ 📄 File: {sess.get('fname', '?')} ✅\n"
+           f"┃ 🏷️ Name: {sess.get('name', '?')} ✅\n"
+           f"┃ 🖼️ Logo: uploaded ✅\n"
+           f"┃\n"
+           f"║───「 💳 Credits 」────────║\n"
+           f"┃ Remaining: {APK_CREDITS}/1\n"
+           f"║──────────────────────────║\n"
+           f"╚═══════════════════════════╝")
+    mk = types.InlineKeyboardMarkup(row_width=2)
+    mk.row(
+        types.InlineKeyboardButton("✅ Submit", callback_data='apk_submit'),
+        types.InlineKeyboardButton("❌ Cancel", callback_data='apk_cancel'))
+    bot.reply_to(message, txt, reply_markup=mk)
+    return True
+
+@bot.message_handler(func=lambda m: m.from_user.id in apk_sessions and apk_sessions[m.from_user.id].get('stage') == 'review')
+def _apk_review_handler(message):
+    """Handle cancel during review stage."""
+    uid = message.from_user.id
+    if (message.text or '').startswith('/cancel'):
+        apk_sessions.pop(uid, None)
+        bot.reply_to(message, "✖️ Cancelled.", reply_markup=create_reply_keyboard_main_menu(uid))
+        return True
+    return False
 
 @bot.message_handler(func=lambda m: m.from_user.id in web_sessions and web_sessions[m.from_user.id].get('stage') == 'name')
 def _web_name_catcher(message):
@@ -5112,6 +5232,26 @@ def _logic_my_websites(message):
     mk.add(types.InlineKeyboardButton("❌ "+_t("close"), callback_data='wclose'))
     bot.reply_to(message, f"🌐 "+_t("your websites")+" ({len(mine)})", reply_markup=mk)
 
+def _logic_apk_dev(message):
+    """APK Development main page — placeholder for future implementation."""
+    uid = message.from_user.id
+    if is_user_banned(uid):
+        bot.reply_to(message, "⛔ your account is restricted from this bot.")
+        return
+    mk = types.InlineKeyboardMarkup(row_width=2)
+    mk.add(types.InlineKeyboardButton("⬆️ Upload File", callback_data='apk_upload'))
+    mk.row(
+        types.InlineKeyboardButton("📱 My APK", callback_data='apk_my'),
+        types.InlineKeyboardButton("👤 My Account", callback_data='apk_account'))
+    mk.add(types.InlineKeyboardButton("🔙 Back", callback_data='apk_back'))
+    txt = ("╔═══「 📱 APK Builder 」═══╗\n"
+           "┃\n"
+           "┃ Build your website into APK\n"
+           "┃\n"
+           "║───「 📥 Actions 」───────║\n"
+           "╚═══════════════════════════╝")
+    bot.reply_to(message, txt, reply_markup=mk)
+
 def _web_site_card(name, d):
     mk = types.InlineKeyboardMarkup()
     mk.add(types.InlineKeyboardButton("🌎 "+_t("open website"), url=_web_url(name)))
@@ -5172,8 +5312,6 @@ def _extract_gh_url(text):
     repo = repo.rstrip('/')
     if repo.lower().endswith('.git'):
         repo = repo[:-4]
-    if '.' in repo:  # trailing like /tree/master, /issues/.. -> keep clean base repo name
-        repo = repo.split('.')[0]
     return f"https://github.com/{owner}/{repo}", owner, repo
 
 def _load_gh_manifest():
@@ -5487,6 +5625,9 @@ def _process_wa_install_module(message):
         success, log = attempt_install_pip(module_name, message, manual_request=True)
     if success:
         logger.info(f"User {user_id} installed module {module_name} for WA bot")
+        bot.reply_to(message, f"✅ module '{module_name}' installed successfully!")
+    else:
+        bot.reply_to(message, f"❌ failed to install '{module_name}'. Check logs.")
 
 def _logic_wa_speed(message):
     user_id = message.from_user.id
@@ -5895,7 +6036,17 @@ def _wa_run_script(script_path, script_owner_id, user_folder, file_name, message
                         if 'Cannot find module' in stderr:
                             mod_match = re.search(r"Cannot find module '(.+?)'", stderr)
                             if mod_match and attempt+1 <= max_attempts:
-                                bot.reply_to(message_obj, f"\U0001F4A5 WA js module '{mod_match.group(1)}' not found. use 🧩 ᴡᴘ ᴅᴇᴘᴇɴᴅᴇɴᴄʏ."); return
+                                module_name = mod_match.group(1).strip().strip("'\"")
+                                if not module_name.startswith('.') and not module_name.startswith('/'):
+                                    success, _ = attempt_install_npm(module_name, user_folder, message_obj)
+                                    if success:
+                                        bot.reply_to(message_obj, "\U0001F9E9 module added — starting again...")
+                                        time.sleep(2)
+                                        threading.Thread(target=_wa_run_script, args=(script_path, script_owner_id, user_folder, file_name, message_obj, attempt + 1)).start()
+                                        return
+                                    else:
+                                        bot.reply_to(message_obj, f"\U0001F4A5 couldn't add module '{module_name}'. stopped.")
+                                        return
                         bot.reply_to(message_obj, f"⚠️ script error in '{file_name}':\n```\n{stderr[:500]}\n```", parse_mode='Markdown')
                         return
             except subprocess.TimeoutExpired:
@@ -6365,6 +6516,174 @@ def handle_callbacks(call):
             try: bot.delete_message(call.message.chat.id, call.message.message_id)
             except Exception: pass
             _logic_my_websites(call.message)
+        elif data == 'apk_dev':
+            bot.answer_callback_query(call.id, "📱 apk builder")
+            try: bot.delete_message(call.message.chat.id, call.message.message_id)
+            except Exception: pass
+            _logic_apk_dev(call.message)
+        elif data == 'apk_upload':
+            bot.answer_callback_query(call.id, "⬆️ upload file")
+            apk_sessions[user_id] = {'stage': 'html'}
+            bot.edit_message_text("📤 Send your .html or .zip file only\n\n⚠️ Max Size: 10 MB",
+                                  call.message.chat.id, call.message.message_id)
+        elif data == 'apk_my':
+            bot.answer_callback_query(call.id, "📱 my apk")
+            apk_list = [(k, v) for k, v in apk_manifest.items() if v.get('uid') == user_id]
+            if not apk_list:
+                bot.edit_message_text("📱 You have no APKs yet\n\nTap ⬆️ Upload File to start",
+                                      call.message.chat.id, call.message.message_id)
+            else:
+                mk = types.InlineKeyboardMarkup(row_width=1)
+                for k, v in apk_list[:5]:
+                    status = v.get('status', 'pending')
+                    icon = '✅' if status == 'completed' else '⏳' if status == 'pending' else '❌'
+                    mk.add(types.InlineKeyboardButton(f"📱 {v.get('name', 'Unknown')} {icon}", callback_data=f"apkdetail_{k}"))
+                mk.add(types.InlineKeyboardButton("🔙 Back", callback_data='apk_back'))
+                bot.edit_message_text(f"📱 Your APKs ({len(apk_list)})",
+                                      call.message.chat.id, call.message.message_id, reply_markup=mk)
+        elif data == 'apk_account':
+            bot.answer_callback_query(call.id, "👤 my account")
+            user_apks = [v for v in apk_manifest.values() if v.get('uid') == user_id]
+            pending = sum(1 for v in user_apks if v.get('status') == 'pending')
+            approved = sum(1 for v in user_apks if v.get('status') == 'completed')
+            rejected = sum(1 for v in user_apks if v.get('status') == 'rejected')
+            txt = (f"╔═══「 👤 My Account 」═══╗\n"
+                   f"┃\n"
+                   f"┃ 🆔 User ID: {user_id}\n"
+                   f"┃ 💳 Credits: {APK_CREDITS - len(user_apks)}/{APK_CREDITS}\n"
+                   f"┃ ─────────────────\n"
+                   f"┃ 📦 APK Created: {len(user_apks)}\n"
+                   f"┃ ⏳ Pending: {pending}\n"
+                   f"┃ ✅ Approved: {approved}\n"
+                   f"┃ ❌ Rejected: {rejected}\n"
+                   f"┃\n"
+                   f"╚═══════════════════════════╝")
+            mk = types.InlineKeyboardMarkup()
+            mk.add(types.InlineKeyboardButton("🔙 Back", callback_data='apk_back'))
+            bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, reply_markup=mk)
+        elif data == 'apk_back':
+            bot.answer_callback_query(call.id)
+            try: bot.delete_message(call.message.chat.id, call.message.message_id)
+            except Exception: pass
+            _logic_apk_dev(call.message)
+        elif data == 'apk_submit':
+            sess = apk_sessions.pop(user_id, None)
+            if not sess or not sess.get('name'):
+                bot.answer_callback_query(call.id, "⚠️ session expired"); return
+            _apk_counter[0] += 1
+            key = f"{user_id}_{_apk_counter[0]}"
+            apk_pending[key] = {'uid': user_id, 'name': sess['name'], 'html': sess.get('html'),
+                                'css': sess.get('css'), 'js': sess.get('js'), 'logo': sess.get('logo'),
+                                'fname': sess.get('fname', '?'), 'created': datetime.now().strftime('%Y-%m-%d %H:%M')}
+            apk_manifest[key] = {'uid': user_id, 'name': sess['name'], 'status': 'pending',
+                                 'created': datetime.now().strftime('%Y-%m-%d %H:%M'), 'credits_used': 1}
+            bot.answer_callback_query(call.id, "✅ submitted!")
+            bot.edit_message_text("⏳ Submitting for review...\n🔔 You'll be notified upon approval",
+                                  call.message.chat.id, call.message.message_id)
+            for aid in admin_ids:
+                try:
+                    mk = types.InlineKeyboardMarkup(row_width=2)
+                    mk.row(
+                        types.InlineKeyboardButton("✅ Approve", callback_data=f"apkapprove_{key}"),
+                        types.InlineKeyboardButton("✖️ Reject", callback_data=f"apkreject_{key}"))
+                    bot.send_message(aid, f"📱 New APK Request\n├─ 👤 {user_id}\n├─ 🏷️ {sess['name']}\n├─ 📄 {sess.get('fname', '?')}\n├─ 🖼️ Logo: {'uploaded' if sess.get('logo') else 'none'}",
+                                     reply_markup=mk)
+                    if sess.get('logo'):
+                        bot.send_photo(aid, sess['logo'], caption=f"📱 Logo for {sess['name']}")
+                except Exception: pass
+        elif data == 'apk_cancel':
+            apk_sessions.pop(user_id, None)
+            bot.answer_callback_query(call.id, "✖️ cancelled")
+            try: bot.delete_message(call.message.chat.id, call.message.message_id)
+            except Exception: pass
+            _logic_apk_dev(call.message)
+        elif data.startswith('apkapprove_'):
+            if user_id not in admin_ids:
+                bot.answer_callback_query(call.id, "🔒 staff only"); return
+            key = data.split('_', 1)[1]
+            ent = apk_pending.pop(key, None)
+            if not ent:
+                bot.answer_callback_query(call.id, "⚠️ expired"); return
+            bot.answer_callback_query(call.id, "🚀 building APK...")
+            bot.edit_message_text(f"🚀 Building APK for `{ent['name']}`...",
+                                  call.message.chat.id, call.message.message_id, parse_mode='Markdown')
+            apk_dir = os.path.join(APK_DIR, str(ent['uid']), ent['name'])
+            os.makedirs(apk_dir, exist_ok=True)
+            if ent.get('html'):
+                ext = ent.get('fname', 'index.html')
+                if not ext.endswith('.html'): ext = 'index.html'
+                with open(os.path.join(apk_dir, ext), 'wb') as f: f.write(ent['html'])
+            if ent.get('css'):
+                with open(os.path.join(apk_dir, 'style.css'), 'wb') as f: f.write(ent['css'])
+            if ent.get('js'):
+                with open(os.path.join(apk_dir, 'script.js'), 'wb') as f: f.write(ent['js'])
+            if ent.get('logo'):
+                with open(os.path.join(apk_dir, 'logo.png'), 'wb') as f: f.write(ent['logo'])
+            apk_manifest[key]['status'] = 'completed'
+            apk_manifest[key]['apk_path'] = apk_dir
+            try:
+                bot.send_message(ent['uid'],
+                    f"╔═══「 📱 APK Ready! 」═══╗\n"
+                    f"┃\n"
+                    f"┃ 🏷️ Name: {ent['name']}\n"
+                    f"┃ 📦 Status: ✅ Approved\n"
+                    f"┃ 📅 Created: {datetime.now().strftime('%Y-%m-%d')}\n"
+                    f"┃\n"
+                    f"╚═══════════════════════════╝\n\n"
+                    f"📥 Files saved to: {apk_dir}")
+            except Exception: pass
+            bot.edit_message_text(f"✅ APK Built: {ent['name']}\n👤 User: {ent['uid']}",
+                                  call.message.chat.id, call.message.message_id)
+        elif data.startswith('apkreject_'):
+            if user_id not in admin_ids:
+                bot.answer_callback_query(call.id, "🔒 staff only"); return
+            key = data.split('_', 1)[1]
+            ent = apk_pending.pop(key, None)
+            if ent and key in apk_manifest:
+                apk_manifest[key]['status'] = 'rejected'
+            bot.answer_callback_query(call.id, "❌ rejected")
+            bot.edit_message_text(f"❌ APK Rejected: {ent['fname'] if ent else '?'}",
+                                  call.message.chat.id, call.message.message_id)
+            if ent:
+                try:
+                    bot.send_message(ent['uid'], "❌ Your APK was rejected by admin\n💳 Credit refunded ✅")
+                except Exception: pass
+        elif data.startswith('apkdetail_'):
+            key = data.split('_', 1)[1]
+            d = apk_manifest.get(key)
+            if not d:
+                bot.answer_callback_query(call.id, "⚠️ not found"); return
+            status = d.get('status', 'pending')
+            status_icon = '✅ Approved' if status == 'completed' else '⏳ Pending' if status == 'pending' else '❌ Rejected'
+            txt = (f"╔═══「 📱 APK Details 」═══╗\n"
+                   f"┃\n"
+                   f"┃ 🏷️ Name: {d.get('name', '?')}\n"
+                   f"┃ 📦 Status: {status_icon}\n"
+                   f"┃ 📅 Created: {d.get('created', '?')}\n"
+                   f"┃ 💳 Credit Used: {d.get('credits_used', 1)}\n"
+                   f"┃\n"
+                   f"╚═══════════════════════════╝")
+            mk = types.InlineKeyboardMarkup()
+            if status == 'completed' and d.get('apk_path'):
+                mk.add(types.InlineKeyboardButton("⬇️ Download APK", callback_data=f"apkdl_{key}"))
+            mk.add(types.InlineKeyboardButton("🔙 Back", callback_data='apk_my'))
+            bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, reply_markup=mk)
+            bot.answer_callback_query(call.id)
+        elif data.startswith('apkdl_'):
+            key = data.split('_', 1)[1]
+            d = apk_manifest.get(key)
+            if not d or not d.get('apk_path'):
+                bot.answer_callback_query(call.id, "⚠️ APK not found"); return
+            try:
+                import shutil
+                zip_path = os.path.join(APK_DIR, f"{d['name']}.zip")
+                shutil.make_archive(zip_path.replace('.zip', ''), 'zip', d['apk_path'])
+                with open(zip_path, 'rb') as f:
+                    bot.send_document(call.message.chat.id, f, caption=f"📱 {d['name']}.zip")
+                os.remove(zip_path)
+            except Exception as e:
+                bot.send_message(call.message.chat.id, f"❌ download failed: {e}")
+            bot.answer_callback_query(call.id)
         elif data.startswith('wapprove_'):
             if user_id not in admin_ids:
                 bot.answer_callback_query(call.id, "\U0001F512 staff only"); return
@@ -6442,7 +6761,10 @@ def handle_callbacks(call):
             _web_deploy_async(call.message.chat.id, call.message.message_id, name,
                               lambda: "♻\uFE0F "+_t("bundle updated"))
         elif data.startswith('wsite_'):
-            _, _, name = data.split('_', 2)
+            try:
+                _, _, name = data.split('_', 2)
+            except ValueError:
+                bot.answer_callback_query(call.id, "⚠️ invalid data"); return
             d = web_manifest.get(name)
             if not d:
                 bot.answer_callback_query(call.id, "\u26A0\uFE0F gone"); return
@@ -7687,7 +8009,7 @@ def bot_performance_callback(call):
         performance_parts.append("📈 **Bot Performance Metrics:**")
         performance_parts.append(f"• Running Scripts: {running_scripts}")
         performance_parts.append(f"• Total Scripts: {total_files}")
-        performance_parts.append(f"• Uptime Ratio: {running_scripts}/{total_files} ({running_scripts/total_files*100:.1f}% if total > 0)")
+        performance_parts.append(f"• Uptime Ratio: {running_scripts}/{total_files}" + (f" ({running_scripts/total_files*100:.1f}%)" if total_files > 0 else ""))
         
         # Resource usage
         try:
@@ -7719,13 +8041,17 @@ def bot_performance_callback(call):
 def cleanup_files_callback(call):
     bot.answer_callback_query(call.id, "🧹 Cleaning up temporary files...")
     try:
-        cleaned_dirs, cleaned_files, cleaned_temp, cleaned_web, killed_zombies = _perform_hosting_cleanup()
+        c = _perform_hosting_cleanup()
         result_msg = (f"🧹 **Cleanup Complete:**\n"
-                      f"• Removed empty directories: {cleaned_dirs}\n"
-                      f"• Cleared old log files: {cleaned_files}\n"
-                      f"• Removed stale temp dirs: {cleaned_temp}\n"
-                      f"• Removed stale web dirs: {cleaned_web}\n"
-                      f"• Killed dead/zombie sessions: {killed_zombies}")
+                      f"• Killed zombies: {c.get('zombies', 0)}\n"
+                      f"• Removed old logs: {c.get('user_logs', 0)}\n"
+                      f"• Removed old files: {c.get('user_files', 0)}\n"
+                      f"• Removed WA files: {c.get('wa_files', 0)}\n"
+                      f"• Removed web stale: {c.get('web_stale', 0)}\n"
+                      f"• Removed temp dirs: {c.get('temp_dirs', 0)}\n"
+                      f"• Expired subs: {c.get('expired_subs', 0)}\n"
+                      f"• Old pending: {c.get('pending_old', 0)}\n"
+                      f"• Empty dirs: {c.get('empty_dirs', 0)}")
         bot.edit_message_text(result_msg, call.message.chat.id, call.message.message_id,
                               reply_markup=create_admin_settings_menu(), parse_mode='Markdown')
     except Exception as e:
