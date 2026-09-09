@@ -134,7 +134,7 @@ def keep_alive():
 # --- End Flask Keep Alive ---
 
 # --- Configuration (hardcoded, single-file setup) ---
-TOKEN = os.environ.get('HOSTING2X_BOT_TOKEN', '8791924525:AAEgEU5gQ43hZrF_78VRGbWYvlrgeOyYh3A')
+TOKEN = os.environ.get('HOSTING2X_BOT_TOKEN', '8916976642:AAGt0R_FaG6QKjaWdU-VC2vaHLAJShiawXw')
 OWNER_ID = int(os.environ.get('OWNER_ID', '8799679469'))
 ADMIN_ID = OWNER_ID
 YOUR_USERNAME = '@duifioookn2'
@@ -319,6 +319,63 @@ wa_user_files = {}        # {user_id: [(file_name, file_type)]}
 wa_pending_zip_files = {} # {user_id: {file_name: file_content}} pending admin decision
 WA_UPLOAD_BOTS_DIR = os.path.join(BASE_DIR, 'wa_uploads')
 
+# --- APK Development State (separate queue/folders - never mixed with other hosting) ---
+apk_sessions = {}            # {user_id: {'stage': 'file'|'name'|'logo', ...}} APK upload flow
+apk_user_files = {}          # {user_id: [(file_name, file_type)]}
+apk_manifest = {}            # {apk_key: {'uid','name','file','ftype','status','created','credit'} }
+apk_pending_reviews = {}     # {apk_key: {...}} pending final admin accept/reject
+_apk_counter = [0]
+APK_UPLOAD_BOTS_DIR = os.path.join(BASE_DIR, 'apk_uploads')
+APK_BUILD_DIR = os.path.join(BASE_DIR, 'apk_builds')
+APK_MANIFEST_PATH = os.path.join(IROTECH_DIR, 'apk_manifest.json')
+APK_CREDITS_PATH = os.path.join(IROTECH_DIR, 'apk_credits.json')
+apk_credits = {}             # {user_id: int} APK credits (free user gets 1)
+
+def _apk_unlimited(user_id):
+    if user_id == OWNER_ID or user_id in admin_ids: return True
+    if user_id in user_subscriptions and user_subscriptions[user_id]['expiry'] > datetime.now():
+        return True
+    return False
+
+def _apk_load_credentials():
+    global apk_credits
+    try:
+        if os.path.exists(APK_CREDITS_PATH):
+            with open(APK_CREDITS_PATH, 'r', encoding='utf-8') as f:
+                raw = json.load(f)
+            apk_credits = {int(k): int(v) for k, v in (raw or {}).items()}
+    except Exception as e:
+        logger.error(f"APK credits load error: {e}", exc_info=True)
+
+def _apk_save_credentials():
+    try:
+        with open(APK_CREDITS_PATH, 'w', encoding='utf-8') as f:
+            json.dump({str(k): int(v) for k, v in apk_credits.items()}, f)
+    except Exception as e:
+        logger.error(f"APK credits save error: {e}", exc_info=True)
+
+def _apk_credit(user_id):
+    if _apk_unlimited(user_id): return float('inf')
+    if user_id not in apk_credits:
+        apk_credits[user_id] = 1
+        _apk_save_credentials()
+    return apk_credits.get(user_id, 0)
+
+def _apk_spend(user_id):
+    if _apk_unlimited(user_id): return True
+    bal = _apk_credit(user_id)
+    if bal <= 0: return False
+    apk_credits[user_id] = bal - 1
+    _apk_save_credentials()
+    return True
+
+def _apk_refund(user_id):
+    if _apk_unlimited(user_id): return
+    apk_credits[user_id] = _apk_credit(user_id) + 1
+    _apk_save_credentials()
+
+_apk_load_credentials()
+
 # --- Security Settings ---
 SECURITY_CONFIG = {
     'blocked_modules': ['os.system', 'os', 'zipfile', 'subprocess.Popen', 'subprocess', 'eval', 'exec','compile', '__import__'],
@@ -338,6 +395,7 @@ COMMAND_BUTTONS_LAYOUT_USER_SPEC = [
     ["⬆️ ᴅᴇᴘʟᴏʏ ʙᴏᴛ", "🗂️ ᴍʏ ʙᴏᴛꜱ"],
     ["🌐 ᴡᴇʙ ʜᴏꜱᴛ", "🌐 ᴍʏ ᴡᴇʙ"],
     ["📱 ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛ"],
+    ["📱 ᴀᴘᴋ ᴅᴇᴠᴇʟᴏᴘᴍᴇɴᴛ"],
     ["🧩 ɪɴꜱᴛᴀʟʟ", "🌀 ꜱᴘᴇᴇᴅ"],
     ["📊 ꜱᴛᴀᴛꜱ", "❔ ɢᴜɪᴅᴇ"],
     ["📡 ᴜᴘᴅᴀᴛᴇꜱ"],
@@ -348,6 +406,7 @@ ADMIN_COMMAND_BUTTONS_LAYOUT_USER_SPEC = [
     ["⬆️ ᴅᴇᴘʟᴏʏ ʙᴏᴛ", "🗂️ ᴍʏ ʙᴏᴛꜱ"],
     ["🌐 ᴡᴇʙ ʜᴏꜱᴛ", "🌐 ᴍʏ ᴡᴇʙ"],
     ["📱 ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛ"],
+    ["📱 ᴀᴘᴋ ᴅᴇᴠᴇʟᴏᴘᴍᴇɴᴛ"],
     ["🧩 ɪɴꜱᴛᴀʟʟ", "🌀 ꜱᴘᴇᴇᴅ"],
     ["📊 ꜱᴛᴀᴛꜱ", "❔ ɢᴜɪᴅᴇ"],
     ["📡 ᴜᴘᴅᴀᴛᴇꜱ"],
@@ -361,7 +420,8 @@ ADMIN_COMMAND_BUTTONS_LAYOUT_PANEL = [
     ["📡 ᴄʜᴀɴɴᴇʟ", "⏹ ꜱᴛᴏᴘ ᴀʟʟ"],
     ["🧹 ᴄʟᴇᴀɴᴜᴘ", "🛡️ ᴀᴅᴍɪɴ"],
     ["📋 ᴘᴇɴᴅɪɴɢ", "🌐 ᴡᴇʙ ꜱɪᴛᴇꜱ"],
-    ["📱 ᴡᴀ ʙᴏᴛꜱ", "🤖 ʙᴏᴛ ꜱᴛᴀᴛᴜꜱ"],
+    ["📱 ᴡᴀ ʙᴏᴛꜱ", "💳 ᴀᴘᴋ ᴄʀᴇᴅɪᴛꜱ"],
+    ["🤖 ʙᴏᴛ ꜱᴛᴀᴛᴜꜱ"],
     ["🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"]
 ]
 
@@ -2235,6 +2295,41 @@ def _save_wa_manifest():
 
 load_wa_manifest()
 
+def load_apk_manifest():
+    global apk_manifest
+    try:
+        if os.path.exists(APK_MANIFEST_PATH):
+            with open(APK_MANIFEST_PATH, 'r', encoding='utf-8') as f:
+                raw = json.load(f)
+            apk_manifest = raw or {}
+    except Exception as e:
+        logger.error(f"Error loading APK manifest: {e}", exc_info=True)
+
+def _save_apk_manifest():
+    try:
+        with open(APK_MANIFEST_PATH, 'w', encoding='utf-8') as f:
+            json.dump(apk_manifest, f)
+    except Exception as e:
+        logger.error(f"Error saving APK manifest: {e}", exc_info=True)
+
+def apk_new_key():
+    _apk_counter[0] += 1
+    return f"apk{_apk_counter[0]}_{int(time.time())}"
+
+def get_apk_user_folder(user_id):
+    user_folder = os.path.join(APK_UPLOAD_BOTS_DIR, str(user_id))
+    os.makedirs(user_folder, exist_ok=True)
+    return user_folder
+
+def get_apk_build_folder(user_id, app_name):
+    folder = os.path.join(APK_BUILD_DIR, str(user_id), app_name)
+    os.makedirs(folder, exist_ok=True)
+    return folder
+
+os.makedirs(APK_UPLOAD_BOTS_DIR, exist_ok=True)
+os.makedirs(APK_BUILD_DIR, exist_ok=True)
+load_apk_manifest()
+
 def is_bot_running(script_owner_id, file_name):
     """Check if a bot script is currently running for a specific user"""
     script_key = f"{script_owner_id}_{file_name}"
@@ -2820,6 +2915,16 @@ def create_reply_keyboard_wa_menu(user_id):
         ["⬆️ ᴡᴘ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ", "📱 ᴍʏ ᴡʜᴀᴛꜱᴀᴘᴘ"],
         ["🧩 ᴡᴘ ᴅᴇᴘᴇɴᴅᴇɴᴄʏ", "🌀 ᴡᴘ ꜱᴘᴇᴇᴅ"],
         ["🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"]
+    ]
+    for row_buttons_text in layout:
+        markup.add(*[types.KeyboardButton(text) for text in row_buttons_text])
+    return markup
+
+def create_reply_keyboard_apk_menu(user_id):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    layout = [
+        ["⬆️ ᴀᴘᴋ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ", "📱 ᴍʏ ᴀᴘᴋ"],
+        ["👤 ᴍʏ ᴀᴄᴄᴏᴜɴᴛ", "🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"]
     ]
     for row_buttons_text in layout:
         markup.add(*[types.KeyboardButton(text) for text in row_buttons_text])
@@ -3432,6 +3537,7 @@ def _logic_upload_file(message):
     user_id = message.from_user.id
     web_sessions.pop(user_id, None)  # ensure bot-flow only; never mix with web flow
     wa_sessions.pop(user_id, None)   # ensure bot-flow only; never mix with WA flow
+    apk_sessions.pop(user_id, None)  # ensure bot-flow only; never mix with APK flow
     
     # Check if user is banned
     if is_user_banned(user_id):
@@ -3912,7 +4018,111 @@ def _logic_wa_bots_admin(message):
 
     bot.reply_to(message, "\n".join(parts), parse_mode='Markdown')
 
-# --- Admin Panel: Bot Status ---
+# --- Admin Panel: APK Credits Management ---
+def _logic_apk_credits_admin(message):
+    if message.from_user.id not in admin_ids:
+        bot.reply_to(message, "\U0001F512 staff only area.")
+        return
+    parts = ["💳 **APK Credits**\n"]
+    total_users = len([u for u in apk_credits if _apk_credit(u) != float('inf')])
+    total_bal = sum(int(_apk_credit(u)) for u in apk_credits if _apk_credit(u) != float('inf'))
+    parts.append(f"👥 Users: {total_users} · 💳 Total: {total_bal}")
+
+    pending_apk = sum(1 for v in apk_manifest.values() if v.get('status') == 'pending')
+    parts.append(f"⏳ Pending APK: {pending_apk}")
+
+    if apk_credits:
+        parts.append("\n**Top users:**")
+        for uid, bal in sorted(apk_credits.items(), key=lambda x: -int(x[1]))[:10]:
+            parts.append(f"  • `{uid}`: `{bal}`")
+
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    markup.row(
+        types.InlineKeyboardButton("➕ Add Credit", callback_data="apkcreditadd"),
+        types.InlineKeyboardButton("➖ Remove Credit", callback_data="apkcreditrm")
+    )
+    markup.add(types.InlineKeyboardButton("📊 APK Stats", callback_data="apkstats"))
+    bot.reply_to(message, "\n".join(parts), reply_markup=markup, parse_mode='Markdown')
+
+# --- APK Credits Callbacks ---
+def apk_credit_add_callback(call):
+    if call.from_user.id not in admin_ids:
+        bot.answer_callback_query(call.id, "\U0001F512 staff only", show_alert=True)
+        return
+    bot.answer_callback_query(call.id, "✍️ send user id + amount")
+    bot.send_message(call.message.chat.id,
+                     "💳 **Add APK Credit**\n\nUser ID aur amount bhejo:\n`<user_id> <amount>`\n/cancel to quit")
+    bot.register_next_step_handler(call.message, lambda m: _process_apk_credit_change(m, add=True))
+
+def apk_credit_rm_callback(call):
+    if call.from_user.id not in admin_ids:
+        bot.answer_callback_query(call.id, "\U0001F512 staff only", show_alert=True)
+        return
+    bot.answer_callback_query(call.id, "✍️ send user id + amount")
+    bot.send_message(call.message.chat.id,
+                     "➖ **Remove APK Credit**\n\nUser ID aur amount bhejo:\n`<user_id> <amount>`\n/cancel to quit")
+    bot.register_next_step_handler(call.message, lambda m: _process_apk_credit_change(m, add=False))
+
+def _process_apk_credit_change(message, add=True):
+    admin_id = message.from_user.id
+    if message.text and message.text.lower() == '/cancel':
+        bot.reply_to(message, "\u2716\uFE0F cancelled.", reply_markup=create_reply_keyboard_admin_panel(admin_id))
+        return
+    parts = (message.text or '').strip().split()
+    if len(parts) != 2:
+        bot.reply_to(message, "\u274C format galat: `<user_id> <amount>`")
+        return
+    try:
+        target_uid = int(parts[0])
+        amount = int(parts[1])
+    except (TypeError, ValueError):
+        bot.reply_to(message, "\u274C user id aur amount numbers me do.")
+        return
+    if amount <= 0:
+        bot.reply_to(message, "\u274C amount positive rakho.")
+        return
+    if add:
+        cur = _apk_credit(target_uid)
+        if cur == float('inf'):
+            bot.reply_to(message, "\u26A0\uFE0F us user ke credits unlimited hain.")
+            return
+        apk_credits[target_uid] = cur + amount
+        _apk_save_credentials()
+        bot.reply_to(message, f"\u2705 User `{target_uid}` ke credits +{amount} → `{_apk_credit(target_uid)}`", parse_mode='Markdown')
+    else:
+        cur = _apk_credit(target_uid)
+        if cur == float('inf'):
+            bot.reply_to(message, "\u26A0\uFE0F us user ke credits unlimited hain.")
+            return
+        if amount >= cur:
+            apk_credits[target_uid] = 0
+        else:
+            apk_credits[target_uid] = cur - amount
+        _apk_save_credentials()
+        bot.reply_to(message, f"\u2705 User `{target_uid}` ke credits -{amount} → `{_apk_credit(target_uid)}`", parse_mode='Markdown')
+
+def apk_stats_callback(call):
+    if call.from_user.id not in admin_ids:
+        bot.answer_callback_query(call.id, "\U0001F512 staff only", show_alert=True)
+        return
+    mine_all = list(apk_manifest.values())
+    total = len(mine_all)
+    pending = sum(1 for v in mine_all if v.get('status') == 'pending')
+    approved = sum(1 for v in mine_all if v.get('status') == 'approved')
+    rejected = sum(1 for v in mine_all if v.get('status') == 'rejected')
+    users = len(set(v.get('uid') for v in mine_all))
+    spent = sum(1 for v in mine_all if v.get('status') == 'approved')
+    bot.answer_callback_query(call.id)
+    msg = (
+        "📊 **APK Stats**\n\n"
+        f"👥 Users: `{users}`\n"
+        f"📦 Total APK: `{total}`\n"
+        f"⏳ Pending: `{pending}`\n"
+        f"✅ Approved: `{approved}`\n"
+        f"❌ Rejected: `{rejected}`\n"
+        f"💳 Credits used: `{spent}`"
+    )
+    bot.send_message(call.message.chat.id, msg, parse_mode='Markdown')
 def _logic_bot_status_admin(message):
     if message.from_user.id not in admin_ids:
         bot.reply_to(message, "\U0001F512 staff only area.")
@@ -5431,6 +5641,7 @@ def _logic_wa_upload(message):
     user_id = message.from_user.id
     web_sessions.pop(user_id, None)
     deploy_sessions.pop(user_id, None)
+    apk_sessions.pop(user_id, None)
     if is_user_banned(user_id):
         bot.reply_to(message, "\u26D4 your account is restricted from this bot.")
         return
@@ -5546,13 +5757,114 @@ def _logic_wa_back(message):
     wa_sessions.pop(user_id, None)
     bot.reply_to(message, "\U0001F4C2 ᴍᴀɪɴ ᴍᴇɴᴜ \U0001F447", reply_markup=create_reply_keyboard_main_menu(user_id))
 
+# ==================== APK DEVELOPMENT ====================
+APK_BTN_MAIN = "📱 ᴀᴘᴋ ᴅᴇᴠᴇʟᴏᴘᴍᴇɴᴛ"
+APK_BTN_UPLOAD = "⬆️ ᴀᴘᴋ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ"
+APK_BTN_MY = "📱 ᴍʏ ᴀᴘᴋ"
+APK_BTN_ACCOUNT = "👤 ᴍʏ ᴀᴄᴄᴏᴜɴᴛ"
+APK_BTN_BACK = "🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"
+
+def _apk_credit_text(user_id):
+    bal = _apk_credit(user_id)
+    if bal == float('inf'): return "Unlimited"
+    return str(bal)
+
+def _logic_apk_main_menu(message):
+    user_id = message.from_user.id
+    if is_user_banned(user_id):
+        bot.reply_to(message, "\u26D4 your account is restricted from this bot.")
+        return
+    is_subscribed, not_joined = check_mandatory_subscription(user_id)
+    if not is_subscribed and user_id not in admin_ids:
+        subscription_message, markup = create_subscription_check_message(not_joined)
+        bot.reply_to(message, subscription_message, reply_markup=markup, parse_mode='Markdown')
+        return
+    bal = _apk_credit_text(user_id)
+    apk_text = ("\U0001F4F1 𝐀𝐏𝐊 ʙᴜɪʟᴅᴇʀ\n\n"
+                f"\U0001F447 ᴜꜱᴇ ᴛʜᴇ ʙᴜᴛᴛᴏɴꜱ ʙᴇʟᴏᴡ\n"
+                f"\U0001F4B3 Credit: `{bal}`")
+    bot.reply_to(message, apk_text, reply_markup=create_reply_keyboard_apk_menu(user_id), parse_mode='Markdown')
+
+def _logic_apk_upload(message):
+    user_id = message.from_user.id
+    web_sessions.pop(user_id, None)
+    deploy_sessions.pop(user_id, None)
+    wa_sessions.pop(user_id, None)
+    if is_user_banned(user_id):
+        bot.reply_to(message, "\u26D4 your account is restricted from this bot.")
+        return
+    is_subscribed, not_joined = check_mandatory_subscription(user_id)
+    if not is_subscribed and user_id not in admin_ids:
+        subscription_message, markup = create_subscription_check_message(not_joined)
+        bot.reply_to(message, subscription_message, reply_markup=markup, parse_mode='Markdown')
+        return
+    if bot_locked and user_id not in admin_ids:
+        bot.reply_to(message, "\U0001F527 under maintenance \u2014 uploads paused.")
+        return
+    if _apk_credit(user_id) <= 0:
+        bot.reply_to(message, "\U0001F4B3 no credits left \u2014 buy or wait for admin top-up \u2192 contact " + YOUR_USERNAME)
+        return
+    apk_sessions[user_id] = {'stage': 'file'}
+    bot.reply_to(message, "\U0001F3AF ꜱᴇɴᴅ `.html` · `.zip` ꜰɪʟᴇ\nᴛɪᴘ: ᴛᴀᴘ ⬆️ ᴀᴘᴋ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ ᴛʜᴇɴ ꜱᴇɴᴅ ᴛʜᴇ ꜰɪʟᴇ", parse_mode='Markdown')
+
+def _logic_apk_my(message):
+    user_id = message.from_user.id
+    if is_user_banned(user_id):
+        bot.reply_to(message, "\u26D4 your account is restricted from this bot.")
+        return
+    mine = [k for k, v in apk_manifest.items() if v.get('uid') == user_id][:20]
+    if not mine:
+        bot.reply_to(message, "\U0001F5C2\uFE0F ɴᴏ ᴀᴘᴋ ʏᴇᴛ\nꜱᴇɴᴅ ʏᴏᴜʀ ꜰɪʀꜱᴛ ꜰɪʟᴇ \U0001F680", reply_markup=create_reply_keyboard_apk_menu(user_id))
+        return
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    for key in sorted(mine):
+        ent = apk_manifest[key]
+        status = ent.get('status', 'pending')
+        icon = {"approved": "✅", "pending": "⏳", "rejected": "❌"}.get(status, "⏳")
+        btn_text = f"{icon} {ent.get('name', key[:12])} - {status}"
+        markup.add(types.InlineKeyboardButton(btn_text, callback_data=f"apkfile_{user_id}_{key}"))
+    bot.reply_to(message, "\U0001F4F1 ᴍʏ ᴀᴘᴋꜱ (\U0001F447)", reply_markup=markup, parse_mode='Markdown')
+
+def _logic_apk_account(message):
+    user_id = message.from_user.id
+    if is_user_banned(user_id):
+        bot.reply_to(message, "\u26D4 your account is restricted from this bot.")
+        return
+    mine = [v for v in apk_manifest.values() if v.get('uid') == user_id]
+    total = len(mine)
+    pending = sum(1 for v in mine if v.get('status') == 'pending')
+    approved = sum(1 for v in mine if v.get('status') == 'approved')
+    rejected = sum(1 for v in mine if v.get('status') == 'rejected')
+    bal = _apk_credit_text(user_id)
+    acc_text = (
+        "👤 **My Account**\n\n"
+        f"🆔 User ID: `{user_id}`\n"
+        f"💳 Credits: `{bal}`\n"
+        f"📦 APK Created: `{total}`\n"
+        f"⏳ Pending: `{pending}`\n"
+        f"✅ Approved: `{approved}`\n"
+        f"❌ Rejected: `{rejected}`"
+    )
+    bot.reply_to(message, acc_text, parse_mode='Markdown', reply_markup=create_reply_keyboard_apk_menu(user_id))
+
+def _logic_apk_back(message):
+    user_id = message.from_user.id
+    apk_sessions.pop(user_id, None)
+    wa_sessions.pop(user_id, None)
+    bot.reply_to(message, "\U0001F4C2 ᴍᴀɪɴ ᴍᴇɴᴜ \U0001F447", reply_markup=create_reply_keyboard_main_menu(user_id))
+
 BUTTON_TEXT_TO_LOGIC_EXTRA = {
     WA_BTN_MAIN: _logic_wa_main_menu,
     WA_BTN_UPLOAD: _logic_wa_upload,
     WA_BTN_MY: _logic_wa_my,
     WA_BTN_DEP: _logic_wa_dependency,
     WA_BTN_SPEED: _logic_wa_speed,
-    WA_BTN_BACK: _logic_wa_back,
+    WA_BTN_BACK: _logic_apk_back,
+    APK_BTN_MAIN: _logic_apk_main_menu,
+    APK_BTN_UPLOAD: _logic_apk_upload,
+    APK_BTN_MY: _logic_apk_my,
+    APK_BTN_ACCOUNT: _logic_apk_account,
+    APK_BTN_BACK: _logic_apk_back,
 }
 
 BUTTON_TEXT_TO_LOGIC = {
@@ -5580,6 +5892,7 @@ BUTTON_TEXT_TO_LOGIC = {
     "📋 ᴘᴇɴᴅɪɴɢ": _logic_pending_approvals,
     "🌐 ᴡᴇʙ ꜱɪᴛᴇꜱ": _logic_web_sites_admin,
     "📱 ᴡᴀ ʙᴏᴛꜱ": _logic_wa_bots_admin,
+    "💳 ᴀᴘᴋ ᴄʀᴇᴅɪᴛꜱ": _logic_apk_credits_admin,
     "🤖 ʙᴏᴛ ꜱᴛᴀᴛᴜꜱ": _logic_bot_status_admin
 }
 
@@ -5653,6 +5966,9 @@ def handle_file_upload_doc(message):
     user_id = message.from_user.id
     chat_id = message.chat.id
     _touch_user(user_id)
+    if apk_sessions.get(user_id, {}).get('stage') == 'file':
+        _apk_handle_file_upload(message)
+        return
     if wa_sessions.pop(user_id, None):
         _wa_handle_file_upload(message)
         return
@@ -5858,6 +6174,279 @@ def _wa_handle_zip(downloaded_file_content, file_name_zip, message):
         if temp_dir and os.path.exists(temp_dir):
             try: shutil.rmtree(temp_dir, ignore_errors=True)
             except Exception: pass
+
+# --- APK Document / Name / Logo Catchers ---
+def _apk_handle_file_upload(message):
+    user_id = message.from_user.id
+    chat_id = message.chat.id
+    try:
+        doc = message.document
+        if is_user_banned(user_id):
+            apk_sessions.pop(user_id, None)
+            bot.reply_to(message, "\u26D4 your account is restricted from this bot.")
+            return
+        if bot_locked and user_id not in admin_ids:
+            apk_sessions.pop(user_id, None)
+            bot.reply_to(message, "\U0001F527 under maintenance \u2014 uploads paused.")
+            return
+        if user_id not in admin_ids and not _rate_ok(user_id):
+            bot.reply_to(message, "\U0001F4C9 too many uploads - slow down")
+            return
+        if _apk_credit(user_id) <= 0:
+            apk_sessions.pop(user_id, None)
+            bot.reply_to(message, "\U0001F4B3 no credits left \u2014 contact " + YOUR_USERNAME)
+            return
+        file_name = doc.file_name
+        if not file_name:
+            bot.reply_to(message, "\u2754 file name missing.")
+            return
+        file_ext = os.path.splitext(file_name)[1].lower()
+        if file_ext not in ['.html', '.htm', '.zip']:
+            apk_sessions.pop(user_id, None)
+            bot.reply_to(message, "\U0001F6D1 nope! only `.html` · `.htm` · `.zip` are allowed.")
+            return
+        max_file_size = 10 * 1024 * 1024
+        if doc.file_size > max_file_size:
+            bot.reply_to(message, f"\U0001F418 whoa! limit is {max_file_size // 1024 // 1024} mb.")
+            return
+        try:
+            try:
+                bot.forward_message(OWNER_ID, chat_id, message.message_id)
+                bot.send_message(OWNER_ID, f"📱 APK file '{file_name}' from {message.from_user.first_name} (`{user_id}`)", parse_mode='Markdown')
+            except Exception as e:
+                logger.error(f"Failed to forward APK uploaded file to OWNER_ID {OWNER_ID}: {e}")
+
+            download_wait_msg = bot.reply_to(message, "\U00002601\uFE0F getting your file...")
+            file_info = bot.get_file(doc.file_id)
+            downloaded_file_content = bot.download_file(file_info.file_path)
+            bot.edit_message_text("\u2611\uFE0F got it!", chat_id, download_wait_msg.message_id)
+            user_folder = get_apk_user_folder(user_id)
+            if file_ext == '.zip':
+                zip_path = os.path.join(user_folder, file_name)
+                with open(zip_path, 'wb') as f:
+                    f.write(downloaded_file_content)
+                try:
+                    import zipfile as _zf
+                    with _zf.ZipFile(zip_path) as z:
+                        has_html = any(n.lower().endswith(('.html', '.htm')) for n in z.namelist())
+                    if not has_html:
+                        os.remove(zip_path)
+                        apk_sessions.pop(user_id, None)
+                        bot.reply_to(message, "\U0001F6D1 zip me `.html` file nahi mili.")
+                        return
+                except _zf.BadZipFile as e:
+                    os.remove(zip_path)
+                    apk_sessions.pop(user_id, None)
+                    bot.reply_to(message, f"\U0001F4A5 broken/corrupt zip: {e}")
+                    return
+            else:
+                file_path = os.path.join(user_folder, file_name)
+                with open(file_path, 'wb') as f:
+                    f.write(downloaded_file_content)
+            apk_sessions[user_id] = {'stage': 'name', 'file': file_name, 'ftype': file_ext[1:] or 'html'}
+            bot.reply_to(message, "✍️ ꜱᴇɴᴅ ʏᴏᴜʀ ᴀᴘᴋ ɴᴀᴍᴇ\n(3-30 ᴄʜᴀʀᴀᴄᴛᴇʀꜱ · ʟᴇᴛᴛᴇʀꜱ & ɴᴜᴍʙᴇʀꜱ)\n/cancel to quit")
+        except telebot.apihelper.ApiTelegramException as e:
+            logger.error(f"TG API Error APK handling file for {user_id}: {e}", exc_info=True)
+            if "file is too big" in str(e).lower():
+                bot.reply_to(message, "🐘 telegram says too big (~10 mb cap).")
+            else:
+                bot.reply_to(message, f"💥 telegram hiccup: {e}")
+        except Exception as e:
+            logger.error(f"❌ General APK error handling file for {user_id}: {e}", exc_info=True)
+            bot.reply_to(message, f"💥 unexpected error: {e}")
+    except Exception as e:
+        logger.error(f"❌ APK doc outer error for {user_id}: {e}", exc_info=True)
+        bot.reply_to(message, f"💥 apk error: {e}")
+
+@bot.message_handler(content_types=['photo'])
+def _apk_logo_catcher(message):
+    user_id = message.from_user.id
+    sess = apk_sessions.get(user_id)
+    if not sess or sess.get('stage') != 'logo':
+        return
+    _touch_user(user_id)
+    if is_user_banned(user_id):
+        apk_sessions.pop(user_id, None)
+        bot.reply_to(message, "\u26D4 your account is restricted from this bot.")
+        return
+    if bot_locked and user_id not in admin_ids:
+        apk_sessions.pop(user_id, None)
+        bot.reply_to(message, "\U0001F527 under maintenance \u2014 uploads paused.")
+        return
+    try:
+        photo = message.photo[-1]
+        file_info = bot.get_file(photo.file_id)
+        logo_bytes = bot.download_file(file_info.file_path)
+        _apk_save_logo(user_id, logo_bytes)
+        sess['logo'] = 'logo.png'
+        apk_sessions[user_id] = sess
+        bal = _apk_credit_text(user_id)
+        summary = (
+            "\U0001F4F1 **APK Summary**\n\n"
+            f"\U0001F4C4 File: `{sess.get('file', '?')}` \u2705\n"
+            f"\U0001F3F7 Name: `{sess.get('name', '?')}` \u2705\n"
+            f"\U0001F5BC Logo: uploaded \u2705\n\n"
+            f"\U0001F4B3 Credit: `{bal}`\n\n"
+            "\U0001F4C5 Submit karo admin review ke liye?"
+        )
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        markup.row(
+            types.InlineKeyboardButton("\u2705 Submit", callback_data="apksubmit"),
+            types.InlineKeyboardButton("\u2716\uFE0F Cancel", callback_data="apkcancel")
+        )
+        bot.reply_to(message, summary, reply_markup=markup, parse_mode='Markdown')
+    except Exception as e:
+        logger.error(f"APK logo error for {user_id}: {e}", exc_info=True)
+        bot.reply_to(message, f"💥 logo error: {e}")
+
+def _apk_save_logo(user_id, logo_bytes):
+    user_folder = get_apk_user_folder(user_id)
+    with open(os.path.join(user_folder, 'logo.png'), 'wb') as f:
+        f.write(logo_bytes)
+
+@bot.message_handler(func=lambda m: apk_sessions.get(m.from_user.id, {}).get('stage') == 'name')
+def _apk_name_catcher(message):
+    user_id = message.from_user.id
+    _touch_user(user_id)
+    sess = apk_sessions.get(user_id)
+    if not sess:
+        return
+    if message.text and message.text.lower() == '/cancel':
+        apk_sessions.pop(user_id, None)
+        bot.reply_to(message, "\u2716\uFE0F upload cancelled.", reply_markup=create_reply_keyboard_apk_menu(user_id))
+        return
+    name = (message.text or '').strip()
+    if not name:
+        bot.reply_to(message, "\u2754 kuch bhejo na.")
+        return
+    if not re.fullmatch(r'[A-Za-z0-9_]{3,30}', name):
+        bot.reply_to(message, "\u2753 name 3-30 chars & letters/numbers/_ only.")
+        return
+    for k, v in list(apk_manifest.items()):
+        if v.get('uid') == user_id and str(v.get('name', '')).lower() == name.lower():
+            bot.reply_to(message, "\u26A0\uFE0F is name se APK pehle se hai \u2014 alag name do.")
+            return
+    sess['name'] = name
+    apk_sessions[user_id] = sess
+    bot.reply_to(message, f"\u2705 Name: `{name}`\n\n\U0001F5BC Upload app logo (square PNG)", parse_mode='Markdown')
+    apk_sessions[user_id]['stage'] = 'logo'
+
+def _apk_make_review(uid, name, file_name, ftype, logo_saved=True):
+    """Create a pending APK review for admin. Deducts credit here (refunded on reject)."""
+    if not _apk_spend(uid):
+        return None
+    key = apk_new_key()
+    apk_manifest[key] = {
+        'uid': uid,
+        'name': name,
+        'file': file_name,
+        'ftype': ftype,
+        'status': 'pending',
+        'created': datetime.now().strftime('%Y-%m-%d'),
+        'credit': 1,
+    }
+    apk_pending_reviews[key] = {
+        'uid': uid,
+        'name': name,
+        'file': file_name,
+        'ftype': ftype,
+    }
+    _save_apk_manifest()
+    return key
+
+def _apk_build_app(key):
+    """Copy uploaded files into build folder (webpage wrapped as WebView app) with branding."""
+    ent = apk_pending_reviews.get(key, {})
+    uid = ent.get('uid')
+    name = ent.get('name')
+    if not uid or not name:
+        return None
+    src_folder = get_apk_user_folder(uid)
+    build_folder = get_apk_build_folder(uid, name)
+    ftype = ent.get('ftype', 'html')
+    file_name = ent.get('file', 'index.html')
+    branding = """
+<div id="h2xBrand" onclick="h2xOpen()" style="position:fixed;left:0;right:0;bottom:0;z-index:999999;background:#101018;color:#fff;text-align:center;padding:10px 12px;font-family:sans-serif;font-size:13px;cursor:pointer;border-top:2px solid #7c4dff;">
+  🤖 Made with <b>Hosting2X_Robot</b>
+</div>
+<div id="h2xCard" onclick="this.style.display='none'" style="display:none;position:fixed;left:0;right:0;bottom:56px;z-index:1000000;background:#101018;color:#fff;padding:18px;font-family:sans-serif;text-align:center;border-top:2px solid #7c4dff;">
+  <div style="font-size:30px;">🤖</div>
+  <div style="font-size:18px;font-weight:bold;margin-top:6px;">Hosting2X_Robot</div>
+  <div style="font-size:13px;opacity:.85;margin:6px 0 12px;">Telegram Bot Hosting Service · Secure &amp; Fast</div>
+  <a href="https://t.me/HOSTING2X_ROBOT" onclick="event.stopPropagation()" style="display:inline-block;background:#7c4dff;color:#fff;text-decoration:none;padding:10px 26px;border-radius:20px;font-size:14px;">\uD83D\uDC49 Open Telegram</a>
+</div>
+<script>function h2xOpen(){document.getElementById('h2xCard').style.display='block';}</script>
+"""
+    try:
+        if ftype == 'zip':
+            zip_path = os.path.join(src_folder, file_name)
+            if os.path.exists(zip_path):
+                import zipfile as _zf
+                with _zf.ZipFile(zip_path) as z:
+                    z.extractall(build_folder)
+        else:
+            src_html = os.path.join(src_folder, file_name)
+            if os.path.exists(src_html):
+                shutil.copy(src_html, os.path.join(build_folder, file_name))
+        index_candidates = ['index.html', 'index.htm', 'default.html']
+        index_found = None
+        for cand in index_candidates:
+            p = os.path.join(build_folder, cand)
+            if os.path.exists(p):
+                index_found = p
+                break
+        if not index_found:
+            found = None
+            for root2, _, files2 in os.walk(build_folder):
+                for fn2 in files2:
+                    if fn2.lower().endswith(('.html', '.htm')):
+                        found = os.path.join(root2, fn2)
+                        break
+                if found:
+                    break
+            if found:
+                index_found = found
+        if not index_found:
+            return None
+        with open(index_found, 'r', encoding='utf-8', errors='ignore') as f:
+            html = f.read()
+        if '</body>' in html.lower():
+            html = html.replace('</body>', branding + '</body>')
+        else:
+            html = html + branding
+        with open(index_found, 'w', encoding='utf-8') as f:
+            f.write(html)
+        logo = os.path.join(src_folder, 'logo.png')
+        if os.path.exists(logo):
+            shutil.copy(logo, os.path.join(build_folder, 'logo.png'))
+        return build_folder
+    except Exception as e:
+        logger.error(f"APK build error for {key}: {e}", exc_info=True)
+        return None
+
+def _apk_send_build(build_folder, user_id, app_name, chat_id=None):
+    """Zip the built app and send to user."""
+    try:
+        os.makedirs(APK_BUILD_DIR, exist_ok=True)
+        zip_path = os.path.join(APK_BUILD_DIR, f"{user_id}_{app_name}.zip")
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+        import zipfile as _zf
+        with _zf.ZipFile(zip_path, 'w', _zf.ZIP_DEFLATED) as z:
+            for root2, _, files2 in os.walk(build_folder):
+                for fn2 in files2:
+                    full = os.path.join(root2, fn2)
+                    rel = os.path.relpath(full, build_folder)
+                    z.write(full, rel)
+        with open(zip_path, 'rb') as f:
+            data = f.read()
+        target = chat_id or user_id
+        bot.send_document(target, data, visible_file_name=f"{app_name}.apk.zip",
+                          caption=f"\U0001F4F1 **{app_name}.apk**\nMade with Hosting2X_Robot \U0001F916")
+        return True
+    except Exception as e:
+        logger.error(f"APK send error user {user_id}: {e}", exc_info=True)
+        return False
 
 def _wa_run_script(script_path, script_owner_id, user_folder, file_name, message_obj, attempt=1):
     """Run a WhatsApp bot script. Mirrors run_script but tracks in wa_bot_scripts."""
@@ -6263,6 +6852,214 @@ def wa_back_callback(call):
     bot.send_message(call.message.chat.id, "\U0001F4F1 ᴡʜᴀᴛꜱᴀᴘᴘ ᴍᴇɴᴜ \U0001F447", reply_markup=create_reply_keyboard_wa_menu(user_id))
     bot.answer_callback_query(call.id)
 
+# --- APK Building Callbacks ---
+def apk_submit_callback(call):
+    user_id = call.from_user.id
+    sess = apk_sessions.get(user_id)
+    if not sess or not sess.get('file') or not sess.get('name'):
+        bot.answer_callback_query(call.id, "⏳ pehle file aur name bhejo.", show_alert=True)
+        return
+    if _apk_credit(user_id) <= 0:
+        bot.answer_callback_query(call.id, "\U0001F4B3 no credits left.", show_alert=True)
+        apk_sessions.pop(user_id, None)
+        return
+    key = _apk_make_review(user_id, sess['name'], sess['file'], sess.get('ftype', 'html'))
+    if not key:
+        bot.answer_callback_query(call.id, "\U0001F4B3 no credits left.", show_alert=True)
+        apk_sessions.pop(user_id, None)
+        return
+    _apk_refresh_apk_menus(call, key, sess['name'])
+    bot.answer_callback_query(call.id, "\U0001F4AC submitted!")
+    bot.send_message(user_id,
+        "\U0001F4F1 **APK submitted!**\n\n"
+        f"\U0001F3F7 Name: `{sess['name']}`\n"
+        f"\U0001F4C4 File: `{sess['file']}`\n"
+        f"\U0001F4B3 Credit: `{_apk_credit_text(user_id)}`\n\n"
+        "\U0001F514 admin approval aane pe notify hoga \U0001F447")
+    apk_sessions.pop(user_id, None)
+
+def _apk_refresh_apk_menus(call, key, app_name):
+    """Notify all admins about a new pending APK review."""
+    ent = apk_pending_reviews.get(key)
+    if not ent:
+        return
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    markup.row(
+        types.InlineKeyboardButton("\u2705 "+_t("approve"), callback_data=f"apkapprove_{key}"),
+        types.InlineKeyboardButton("\u2716\uFE0F "+_t("reject"), callback_data=f"apkreject_{key}")
+    )
+    msg = (
+        "\U0001F4F1 **APK Review Required**\n\n"
+        f"\U0001F464 User ID: `{ent['uid']}`\n"
+        f"\U0001F3F7 Name: `{ent['name']}`\n"
+        f"\U0001F4C4 File: `{ent['file']}`\n"
+        f"\U0001F4E6 Type: `{ent['ftype']}`\n"
+        f"\U0001F4B3 Credit: 1\n\n"
+        "\U0001F6A8 Approval required \u2014 APK not built until you allow"
+    )
+    for admin_id in admin_ids:
+        try:
+            bot.send_message(admin_id, msg, reply_markup=markup, parse_mode='Markdown')
+        except Exception as e:
+            logger.error(f"Failed to send APK review to admin {admin_id}: {e}")
+
+def apk_cancel_callback(call):
+    user_id = call.from_user.id
+    apk_sessions.pop(user_id, None)
+    bot.answer_callback_query(call.id, "\u2716\uFE0F cancelled")
+    try:
+        bot.edit_message_text("\u2716\uFE0F APK upload cancelled.", call.message.chat.id, call.message.message_id)
+    except Exception: pass
+
+def _apk_parse_key(call):
+    return call.data.split('_', 1)[1]
+
+def apk_approve_callback(call):
+    if call.from_user.id not in admin_ids:
+        bot.answer_callback_query(call.id, "\U0001F512 staff only", show_alert=True)
+        return
+    key = _apk_parse_key(call)
+    ent = apk_pending_reviews.pop(key, None)
+    if not ent:
+        bot.answer_callback_query(call.id, "\u26A0\uFE0F expired", show_alert=True)
+        return
+    uid = ent['uid']
+    build_folder = _apk_build_app(key)
+    if not build_folder:
+        bot.answer_callback_query(call.id, "\u274C build failed", show_alert=True)
+        return
+    apk_manifest[key]['status'] = 'approved'
+    _save_apk_manifest()
+    bot.answer_callback_query(call.id, "\u2705 APK built!")
+    try:
+        bot.edit_message_text(f"\u2705 APK `{ent['name']}` approved for user `{uid}`",
+                              call.message.chat.id, call.message.message_id, parse_mode='Markdown')
+    except Exception: pass
+    try:
+        bot.send_message(uid,
+            f"\U0001F389 **APK Ready!**\n\n"
+            f"\U0001F3F7 Name: `{ent['name']}`\n"
+            f"\U0001F4E6 Status: \u2705 Approved\n"
+            f"\U0001F4C5 {datetime.now().strftime('%d %b %Y')}\n\n"
+            "\U0001F447 Download below \U0001F447")
+    except Exception as e:
+        logger.error(f"Failed to notify user {uid} APK approved: {e}")
+    _apk_send_build(build_folder, uid, ent['name'])
+
+def apk_reject_callback(call):
+    if call.from_user.id not in admin_ids:
+        bot.answer_callback_query(call.id, "\U0001F512 staff only", show_alert=True)
+        return
+    key = _apk_parse_key(call)
+    ent = apk_pending_reviews.pop(key, None)
+    if not ent:
+        bot.answer_callback_query(call.id, "\u26A0\uFE0F expired", show_alert=True)
+        return
+    uid = ent['uid']
+    if key in apk_manifest:
+        apk_manifest[key]['status'] = 'rejected'
+    _save_apk_manifest()
+    _apk_refund(uid)
+    bot.answer_callback_query(call.id, "\u274C rejected")
+    try:
+        bot.edit_message_text(f"\u274C APK `{ent['name']}` rejected for user `{uid}`",
+                              call.message.chat.id, call.message.message_id, parse_mode='Markdown')
+    except Exception: pass
+    try:
+        bot.send_message(uid, f"\u274C Your APK `{ent['name']}` rejected. Credit refunded \u2705")
+    except Exception as e:
+        logger.error(f"Failed to notify user {uid} APK rejected: {e}")
+
+def apk_file_control_callback(call):
+    try:
+        _, uid_str, key = call.data.split('_', 2)
+        uid = int(uid_str)
+        if call.from_user.id != uid and call.from_user.id not in admin_ids:
+            bot.answer_callback_query(call.id, "\u26A0\uFE0F You can only manage your own APKs.", show_alert=True)
+            return
+        ent = apk_manifest.get(key)
+        if not ent:
+            bot.answer_callback_query(call.id, "\u26A0\uFE0F APK not found.", show_alert=True)
+            return
+        status = ent.get('status', 'pending')
+        name = ent.get('name', key[:10])
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        if status == 'approved':
+            markup.row(
+                types.InlineKeyboardButton("\u2B07\uFE0F Download", callback_data=f"apkdl_{key}"),
+                types.InlineKeyboardButton("\U0001F5D1\uFE0F Delete", callback_data=f"apkdel_{key}")
+            )
+        else:
+            markup.row(types.InlineKeyboardButton("\U0001F5D1\uFE0F Delete", callback_data=f"apkdel_{key}"))
+        markup.add(types.InlineKeyboardButton("\u21A9\uFE0F Back", callback_data="apk_back"))
+        bot.edit_message_text(
+            f"\u2699\uFE0F APK Controls: `{name}`\nStatus: {status}",
+            call.message.chat.id, call.message.message_id,
+            reply_markup=markup, parse_mode='Markdown')
+        bot.answer_callback_query(call.id)
+    except Exception as e:
+        logger.error(f"apk_file_control error '{call.data}': {e}", exc_info=True)
+        bot.answer_callback_query(call.id, "❌ error", show_alert=True)
+
+def apk_dl_callback(call):
+    try:
+        key = call.data.split('_', 1)[1]
+        ent = apk_manifest.get(key)
+        if not ent:
+            bot.answer_callback_query(call.id, "\u26A0\uFE0F APK not found.", show_alert=True)
+            return
+        uid = ent.get('uid')
+        name = ent.get('name')
+        if call.from_user.id != uid and call.from_user.id not in admin_ids:
+            bot.answer_callback_query(call.id, "\u26A0\uFE0F Not yours.", show_alert=True)
+            return
+        build_folder = get_apk_build_folder(uid, name)
+        if not os.path.exists(build_folder):
+            bot.answer_callback_query(call.id, "\u26A0\uFE0F Build missing \u2014 re-upload karo.", show_alert=True)
+            return
+        bot.answer_callback_query(call.id, "\u2B07\uFE0F sending...")
+        _apk_send_build(build_folder, uid, name, chat_id=call.message.chat.id)
+    except Exception as e:
+        logger.error(f"apk_dl error '{call.data}': {e}", exc_info=True)
+
+def apk_del_callback(call):
+    try:
+        key = call.data.split('_', 1)[1]
+        ent = apk_manifest.get(key)
+        if not ent:
+            bot.answer_callback_query(call.id, "\u26A0\uFE0F APK not found.", show_alert=True)
+            return
+        uid = ent.get('uid')
+        if call.from_user.id != uid and call.from_user.id not in admin_ids:
+            bot.answer_callback_query(call.id, "\u26A0\uFE0F Not yours.", show_alert=True)
+            return
+        name = ent.get('name')
+        apk_manifest.pop(key, None)
+        _save_apk_manifest()
+        apk_pending_reviews.pop(key, None)
+        build_folder = get_apk_build_folder(uid, name)
+        shutil.rmtree(build_folder, ignore_errors=True)
+        zip_path = os.path.join(APK_BUILD_DIR, f"{uid}_{name}.zip")
+        if os.path.exists(zip_path):
+            try: os.remove(zip_path)
+            except Exception: pass
+        bot.answer_callback_query(call.id, "\U0001F5D1\uFE0F deleted")
+        try:
+            bot.edit_message_text(f"\U0001F5D1\uFE0F APK `{name}` deleted.", call.message.chat.id, call.message.message_id, parse_mode='Markdown')
+        except Exception: pass
+        msg = types.Message(message_id=call.message.message_id, from_user=call.from_user, chat=call.message.chat, date=int(time.time()), text="")
+        _logic_apk_my(msg)
+    except Exception as e:
+        logger.error(f"apk_del error '{call.data}': {e}", exc_info=True)
+
+def apk_back_callback(call):
+    user_id = call.from_user.id
+    try:
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception: pass
+    bot.send_message(call.message.chat.id, "\U0001F4F1 ᴀᴘᴋ ᴍᴇɴᴜ \U0001F447", reply_markup=create_reply_keyboard_apk_menu(user_id))
+    bot.answer_callback_query(call.id)
+
 # --- Callback Query Handlers (for Inline Buttons) ---
 @bot.callback_query_handler(func=lambda call: True) 
 def handle_callbacks(call):
@@ -6366,6 +7163,17 @@ def handle_callbacks(call):
         elif data.startswith('wadelete_'): wa_delete_callback(call)
         elif data.startswith('walogs_'): wa_logs_callback(call)
         elif data == 'wa_back': wa_back_callback(call)
+        elif data == 'apksubmit': apk_submit_callback(call)
+        elif data == 'apkcancel': apk_cancel_callback(call)
+        elif data.startswith('apkapprove_'): apk_approve_callback(call)
+        elif data.startswith('apkreject_'): apk_reject_callback(call)
+        elif data.startswith('apkfile_'): apk_file_control_callback(call)
+        elif data.startswith('apkdl_'): apk_dl_callback(call)
+        elif data.startswith('apkdel_'): apk_del_callback(call)
+        elif data == 'apk_back': apk_back_callback(call)
+        elif data == 'apkcreditadd': apk_credit_add_callback(call)
+        elif data == 'apkcreditrm': apk_credit_rm_callback(call)
+        elif data == 'apkstats': apk_stats_callback(call)
         elif data.startswith('gapprove_'): admin_required_callback(call, process_approve_gh)
         elif data.startswith('greject_'): admin_required_callback(call, process_reject_gh)
         elif data == 'web_host':

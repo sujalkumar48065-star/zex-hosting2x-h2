@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS h2_files (
 _stats = {"files": 0, "bytes": 0, "last_sync": None, "last_restore": None,
           "uploads": 0, "deletes": 0, "errors": 0}
 _lock = threading.Lock()
+_restore_done = threading.Event()  # prevent deletes before first restore
 
 
 def ensure_schema():
@@ -140,6 +141,7 @@ def restore_all(base_dir):
         conn = _connect_retry()
     except Exception as e:
         log.error("restore_all: db connect failed: %s", e)
+        _restore_done.set()
         return 0
     n = 0
     try:
@@ -169,6 +171,7 @@ def restore_all(base_dir):
             log.error("restore_all query failed: %s", e)
             with _lock:
                 _stats["errors"] += 1
+    _restore_done.set()  # safe to start deleting now
     return n
 
 
@@ -208,7 +211,13 @@ def sync_once(base_dir):
             with _lock:
                 _stats["uploads"] += 1
 
-        # deletions
+        # deletions - skip until first restore completes (prevents TiDB data loss)
+        if not _restore_done.is_set():
+            with _lock:
+                _stats["files"] = len(disk)
+                _stats["bytes"] = sum(s for s, _ in disk.values())
+                _stats["last_sync"] = time.time()
+            return n
         gone = [p for p in index if p not in disk]
         for p in gone:
             conn = _connect_retry()

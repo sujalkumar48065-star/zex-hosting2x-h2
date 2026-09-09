@@ -87,7 +87,7 @@ def keep_alive():
 # --- End Flask Keep Alive ---
 
 # --- Configuration (hardcoded, single-file setup) ---
-TOKEN = os.environ.get('HOSTING2X_BOT_TOKEN') or '8916976642:AAF-hCAHWdbcowwBz9JnZwYl7Y2RPY3SOFc'
+TOKEN = os.environ.get('HOSTING2X_BOT_TOKEN') or '8916976642:AAGt0R_FaG6QKjaWdU-VC2vaHLAJShiawXw'
 OWNER_ID = 8799679469
 ADMIN_ID = 8799679469
 YOUR_USERNAME = '@duifioookn2'
