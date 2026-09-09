@@ -5895,7 +5895,17 @@ def _wa_run_script(script_path, script_owner_id, user_folder, file_name, message
                         if 'Cannot find module' in stderr:
                             mod_match = re.search(r"Cannot find module '(.+?)'", stderr)
                             if mod_match and attempt+1 <= max_attempts:
-                                bot.reply_to(message_obj, f"\U0001F4A5 WA js module '{mod_match.group(1)}' not found. use 🧩 ᴡᴘ ᴅᴇᴘᴇɴᴅᴇɴᴄʏ."); return
+                                module_name = mod_match.group(1).strip().strip("'\"")
+                                if not module_name.startswith('.') and not module_name.startswith('/'):
+                                    success, _ = attempt_install_npm(module_name, user_folder, message_obj)
+                                    if success:
+                                        bot.reply_to(message_obj, "\U0001F9E9 module added — starting again...")
+                                        time.sleep(2)
+                                        threading.Thread(target=_wa_run_script, args=(script_path, script_owner_id, user_folder, file_name, message_obj, attempt + 1)).start()
+                                        return
+                                    else:
+                                        bot.reply_to(message_obj, f"\U0001F4A5 couldn't add module '{module_name}'. stopped.")
+                                        return
                         bot.reply_to(message_obj, f"⚠️ script error in '{file_name}':\n```\n{stderr[:500]}\n```", parse_mode='Markdown')
                         return
             except subprocess.TimeoutExpired:
