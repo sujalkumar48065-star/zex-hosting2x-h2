@@ -6410,11 +6410,12 @@ def _apk_build_app(key):
             return None
         with open(index_found, 'r', encoding='utf-8', errors='ignore') as f:
             html = f.read()
+        html = html.encode('utf-8', errors='ignore').decode('utf-8')
         if '</body>' in html.lower():
             html = html.replace('</body>', branding + '</body>')
         else:
             html = html + branding
-        with open(index_found, 'w', encoding='utf-8') as f:
+        with open(index_found, 'w', encoding='utf-8', errors='ignore') as f:
             f.write(html)
         logo = os.path.join(src_folder, 'logo.png')
         if os.path.exists(logo):
