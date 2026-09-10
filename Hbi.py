@@ -6356,7 +6356,7 @@ def _apk_make_review(uid, name, file_name, ftype, logo_saved=True):
 
 def _apk_build_app(key):
     """Copy uploaded files into build folder (webpage wrapped as WebView app) with branding."""
-    ent = apk_pending_reviews.get(key, {})
+    ent = apk_manifest.get(key, apk_pending_reviews.get(key, {}))
     uid = ent.get('uid')
     name = ent.get('name')
     if not uid or not name:

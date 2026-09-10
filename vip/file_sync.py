@@ -120,18 +120,23 @@ def _connect_retry(attempts=3):
 
 
 def _walk_files(base_dir):
-    root = os.path.join(base_dir, "upload_bots")
+    roots = [
+        os.path.join(base_dir, "upload_bots"),
+        os.path.join(base_dir, "apk_uploads"),
+        os.path.join(base_dir, "apk_builds"),
+    ]
     out = []
-    if not os.path.isdir(root):
-        return out
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d != "__pycache__"]
-        for fn in filenames:
-            if fn.endswith(".pyc"):
-                continue
-            full = os.path.join(dirpath, fn)
-            rel = os.path.relpath(full, base_dir).replace(os.sep, "/")
-            out.append((rel, full))
+    for root in roots:
+        if not os.path.isdir(root):
+            continue
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [d for d in dirnames if d != "__pycache__"]
+            for fn in filenames:
+                if fn.endswith(".pyc"):
+                    continue
+                full = os.path.join(dirpath, fn)
+                rel = os.path.relpath(full, base_dir).replace(os.sep, "/")
+                out.append((rel, full))
     return out
 
 
