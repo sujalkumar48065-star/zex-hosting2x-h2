@@ -329,13 +329,34 @@ APK_UPLOAD_BOTS_DIR = os.path.join(BASE_DIR, 'apk_uploads')
 APK_BUILD_DIR = os.path.join(BASE_DIR, 'apk_builds')
 APK_MANIFEST_PATH = os.path.join(IROTECH_DIR, 'apk_manifest.json')
 APK_CREDITS_PATH = os.path.join(IROTECH_DIR, 'apk_credits.json')
-apk_credits = {}             # {user_id: int} APK credits (free user gets 1)
+APK_UNLIMITED_PATH = os.path.join(IROTECH_DIR, 'apk_unlimited.json')
+apk_unlimited_until = {}          # {user_id: unix_ts} APK-only 1-month unlimited
+
+def _apk_load_unlimited():
+    global apk_unlimited_until
+    try:
+        if os.path.exists(APK_UNLIMITED_PATH):
+            with open(APK_UNLIMITED_PATH, 'r', encoding='utf-8') as f:
+                raw = json.load(f)
+            apk_unlimited_until = {int(k): int(v) for k, v in (raw or {}).items()}
+    except Exception as e:
+        logger.error(f"APK unlimited load error: {e}", exc_info=True)
+
+def _apk_save_unlimited():
+    try:
+        with open(APK_UNLIMITED_PATH, 'w', encoding='utf-8') as f:
+            json.dump({str(k): int(v) for k, v in apk_unlimited_until.items() if int(v) > int(time.time())}, f)
+    except Exception as e:
+        logger.error(f"APK unlimited save error: {e}", exc_info=True)
 
 def _apk_unlimited(user_id):
     if user_id == OWNER_ID or user_id in admin_ids: return True
+    if apk_unlimited_until.get(user_id, 0) > int(time.time()):
+        return True
     if user_id in user_subscriptions and user_subscriptions[user_id]['expiry'] > datetime.now():
         return True
     return False
+apk_credits = {}             # {user_id: int} APK credits (free user gets 1)
 
 def _apk_load_credentials():
     global apk_credits
@@ -375,6 +396,7 @@ def _apk_refund(user_id):
     _apk_save_credentials()
 
 _apk_load_credentials()
+_apk_load_unlimited()
 
 # --- Security Settings ---
 SECURITY_CONFIG = {
@@ -5885,6 +5907,8 @@ def _logic_apk_credit_menu(message):
             ("1 ᴄʀᴇᴅɪᴛ — ₹5", "buycredit_1"),
             ("10 ᴄʀᴇᴅɪᴛꜱ — ₹40", "buycredit_10"),
             ("30 ᴄʀᴇᴅɪᴛꜱ — ₹110", "buycredit_30"),
+            ("50 ᴄʀᴇᴅɪᴛꜱ — ₹175", "buycredit_50"),
+            ("1 ᴍᴏɴᴛʜ ᴜɴʟɪᴍɪᴛᴇᴅ — ₹300", "buycredit_unlim"),
         ]
         for label, cb in packs:
             markup.add(types.InlineKeyboardButton(label, callback_data=cb))
@@ -5902,6 +5926,8 @@ def apk_buy_credit_callback(call):
         "buycredit_1": ("1 credit", "₹5"),
         "buycredit_10": ("10 credits", "₹40"),
         "buycredit_30": ("30 credits", "₹110"),
+        "buycredit_50": ("50 credits", "₹175"),
+        "buycredit_unlim": ("1 month unlimited (APK only)", "₹300"),
     }
     credits, price = pack_map.get(data, ("pack", "₹--"))
     try:
@@ -5920,7 +5946,7 @@ def apk_buy_credit_callback(call):
                 f"💳 Balance: `{_apk_credit_text(user_id)}`\n\n"
                 f"Payment confirm hote hi credits add karo \u2193",
                 reply_markup=types.InlineKeyboardMarkup().add(
-                    types.InlineKeyboardButton(f"✅ Add {credits}", callback_data=f"buycreditok_{user_id}_{data.strip('buycredit_')}"),
+                    types.InlineKeyboardButton(f"✅ Add {credits}", callback_data=f"buycreditok_{user_id}_{data.replace('buycredit_', '')}"),
                     types.InlineKeyboardButton("❌ Deny", callback_data=f"buycreditno_{user_id}")
                 ),
                 parse_mode='Markdown'
@@ -5932,9 +5958,9 @@ def apk_buy_credit_callback(call):
         "🧾 **Payment Instructions**\n\n"
         f"📦 Pack: `{credits}`\n"
         f"💰 Amount: `{price}`\n\n"
-        f"💳 ʙᴀɴᴋ/ᴜᴘɪ ᴅᴇᴛᴀɪʟꜱ:\n`{YOUR_USERNAME}`\n\n"
-        "✅ Send screenshot of payment to the admin above.\n"
-        "🔁 Admin will add credits instantly after confirm."
+        f"📲 To pay, contact the admin directly:\n👑 {YOUR_USERNAME}\n\n"
+        "✅ Once payment is confirmed, admin will add your credits.\n"
+        "🔁 Credits are auto-refunded if your APK is rejected or build fails."
     )
     bot.send_message(user_id, pay_text, parse_mode='Markdown')
 
@@ -5945,9 +5971,36 @@ def apk_buy_credit_ok_callback(call):
     parts = call.data.split('_')
     try:
         target_uid = int(parts[1])
-        amount = int(parts[2])
     except (ValueError, IndexError):
         bot.answer_callback_query(call.id, "❌ bad request", show_alert=True)
+        return
+    amount_part = parts[2] if len(parts) > 2 else '0'
+    is_unlim = (amount_part == 'unlim')
+    if not is_unlim:
+        try:
+            amount = int(amount_part)
+        except (ValueError, IndexError):
+            bot.answer_callback_query(call.id, "❌ bad request", show_alert=True)
+            return
+    if is_unlim:
+        apk_unlimited_until[target_uid] = int(time.time()) + 30 * 24 * 60 * 60
+        _apk_save_unlimited()
+        _apk_save_credentials()
+        bot.answer_callback_query(call.id, "✅ 1 month unlimited activated (APK only)", show_alert=True)
+        try:
+            bot.edit_message_text(
+                f"✅ **Purchase Approved**\n\n🆔 `{target_uid}` → 1 MONTH UNLIMITED (APK)",
+                call.message.chat.id, call.message.message_id, parse_mode='Markdown')
+        except Exception:
+            pass
+        try:
+            bot.send_message(target_uid,
+                             "✅ **Payment confirmed!** 🎉\n"
+                             "♾️ APK Unlimited activated for **1 month**.\n"
+                             "_Refund after 1 month_:\n`%s`" % time.strftime('%d %b %Y', time.localtime(apk_unlimited_until[target_uid])),
+                             parse_mode='Markdown')
+        except Exception as e:
+            logger.error(f"buy unlimited confirm notify {target_uid}: {e}", exc_info=True)
         return
     apk_credits[target_uid] = _apk_credit(target_uid) + amount
     _apk_save_credentials()
@@ -6423,7 +6476,7 @@ def _apk_logo_catcher(message):
             f"\U0001F3F7 Name: `{sess.get('name', '?')}` \u2705\n"
             f"\U0001F5BC Logo: uploaded \u2705\n\n"
             f"\U0001F4B3 Credit: `{bal}`\n\n"
-            "\U0001F4C5 Submit karo admin review ke liye?"
+            "\U0001F4C5 Submit for admin review?"
         )
         markup = types.InlineKeyboardMarkup(row_width=2)
         markup.row(
@@ -7259,7 +7312,7 @@ def apk_dl_callback(call):
             return
         build_folder = get_apk_build_folder(uid, name)
         if not os.path.exists(build_folder):
-            bot.answer_callback_query(call.id, "\u26A0\uFE0F Build missing \u2014 re-upload karo.", show_alert=True)
+            bot.answer_callback_query(call.id, "\u26A0\uFE0F Build missing \u2014 re-upload the file.", show_alert=True)
             return
         bot.answer_callback_query(call.id, "\u2B07\uFE0F sending...")
         _apk_send_build(uid, name, build_folder=build_folder, chat_id=call.message.chat.id)
