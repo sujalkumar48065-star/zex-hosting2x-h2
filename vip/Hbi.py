@@ -6469,6 +6469,8 @@ def _apk_send_build(user_id, app_name, build_folder=None, chat_id=None, html_tex
             bot.send_message(target, "\U0001F4E5 build folder missing html — nothing to package.")
             return False
 
+        safe_name = str(app_name).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
         apk_name = os.path.join(APK_BUILD_DIR, f"{user_id}_{app_name}")
         apk_path = f"{apk_name}.apk"
         if os.path.exists(apk_path):
@@ -6488,7 +6490,17 @@ def _apk_send_build(user_id, app_name, build_folder=None, chat_id=None, html_tex
                 bot.send_message(target, "⚠️ APK too large (49MB+). try lighter html.")
                 return False
             bot.send_document(target, data, visible_file_name=f"{app_name}.apk",
-                              caption=f"\U0001F4F1 **{app_name}.apk**\nReal installable Android app — Made with Hosting2X_Robot \U0001F916")
+                              caption=(
+                                  f"📱 <b>{safe_name}.apk</b>\n"
+                                  "━━━━━━━━━━━━━\n"
+                                  "✨ Real installable Android app\n"
+                                  "🧩 Version: 1.0\n"
+                                  "🤖 Made with <b>Hosting2X_Robot</b>\n"
+                                  "━━━━━━━━━━━━━\n"
+                                  "💬 \"Your ideas, built to reach the world.\"\n"
+                                  "➜ Interact like a normal app on your phone."),
+                              parse_mode='HTML',
+                              disable_web_page_preview=True)
             return True
 
         zip_path = f"{apk_name}.zip"
@@ -6509,7 +6521,11 @@ def _apk_send_build(user_id, app_name, build_folder=None, chat_id=None, html_tex
         with open(zip_path, 'rb') as f:
             data = f.read()
         bot.send_document(target, data, visible_file_name=f"{app_name}.apk.zip",
-                          caption=f"\U0001F4F1 **{app_name}.apk** (zip fallback)\nMade with Hosting2X_Robot \U0001F916")
+                          caption=(
+                              f"📱 <b>{safe_name}.apk</b> (fallback)\n"
+                              "⚠️ Full APK build unavailable, zip bundle sent.\n"
+                              "🤖 Made with <b>Hosting2X_Robot</b>"),
+                          parse_mode='HTML')
         return True
     except Exception as e:
         logger.error(f"APK send error user {user_id}: {e}", exc_info=True)
