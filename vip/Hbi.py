@@ -6567,6 +6567,7 @@ def _apk_build_app(key):
     build_folder = get_apk_build_folder(uid, name)
     if os.path.isdir(build_folder):
         shutil.rmtree(build_folder, ignore_errors=True)
+    os.makedirs(build_folder, exist_ok=True)
     ftype = ent.get('ftype', 'html')
     file_name = ent.get('file', 'index.html')
     branding = """
