@@ -3259,8 +3259,13 @@ def run_script(script_path, script_owner_id, user_folder, file_name, message_obj
              return
 
         if attempt == 1:
-            check_command = [sys.executable, script_path]
-            logger.info(f"Running Python pre-check: {' '.join(check_command)}")
+            # Pre-check: import module top-level WITHOUT running __main__ polling.
+            # Running the script directly here starts a real telegram poller that
+            # conflicts (409) with the long-run process -> bot dies right after start.
+            check_command = [sys.executable, '-c',
+                             "import runpy,sys; runpy.run_path(sys.argv[1], run_name='__import_check__')",
+                             script_path]
+            logger.info(f"Running Python pre-check (import-only): {script_path}")
             check_proc = None
             try:
                 check_proc = subprocess.Popen(check_command, cwd=user_folder, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='ignore')
@@ -6767,7 +6772,14 @@ def _wa_run_script(script_path, script_owner_id, user_folder, file_name, message
             remove_wa_file2db(script_owner_id, file_name)
             return
         if attempt == 1:
-            check_command = [sys.executable, script_path] if ext == '.py' else ['node', script_path]
+            if ext == '.py':
+                # import-only pre-check: do NOT execute __main__ (avoids bot polling
+                # 409-conflict that kills freshly started bots)
+                check_command = [sys.executable, '-c',
+                                 "import runpy,sys; runpy.run_path(sys.argv[1], run_name='__import_check__')",
+                                 script_path]
+            else:
+                check_command = ['node', script_path]
             check_proc = None
             try:
                 check_proc = subprocess.Popen(check_command, cwd=user_folder, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='ignore')
