@@ -6373,16 +6373,21 @@ def _apk_build_app(key):
     ftype = ent.get('ftype', 'html')
     file_name = ent.get('file', 'index.html')
     branding = """
-<div id="h2xBrand" onclick="h2xOpen()" style="position:fixed;left:0;right:0;bottom:0;z-index:999999;background:#101018;color:#fff;text-align:center;padding:10px 12px;font-family:sans-serif;font-size:13px;cursor:pointer;border-top:2px solid #7c4dff;">
-  🤖 Made with <b>Hosting2X_Robot</b>
+<div id="h2xBrand" onclick="h2xOpen()" style="position:fixed;left:12px;bottom:12px;z-index:999999;background:rgba(16,16,24,.85);color:#fff;text-align:left;padding:8px 14px;font-family:sans-serif;font-size:12px;cursor:pointer;border-radius:20px;border:1px solid rgba(124,77,255,.6);box-shadow:0 2px 10px rgba(0,0,0,.3);">
+  \U0001F916 Made with <b>Hosting2X_Robot</b>
 </div>
-<div id="h2xCard" onclick="this.style.display='none'" style="display:none;position:fixed;left:0;right:0;bottom:56px;z-index:1000000;background:#101018;color:#fff;padding:18px;font-family:sans-serif;text-align:center;border-top:2px solid #7c4dff;">
-  <div style="font-size:30px;">🤖</div>
-  <div style="font-size:18px;font-weight:bold;margin-top:6px;">Hosting2X_Robot</div>
-  <div style="font-size:13px;opacity:.85;margin:6px 0 12px;">Telegram Bot Hosting Service · Secure &amp; Fast</div>
-  <a href="https://t.me/HOSTING2X_ROBOT" onclick="event.stopPropagation()" style="display:inline-block;background:#7c4dff;color:#fff;text-decoration:none;padding:10px 26px;border-radius:20px;font-size:14px;">\uD83D\uDC49 Open Telegram</a>
+<div id="h2xOverlay" onclick="h2xClose()" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:1000000;background:rgba(0,0,0,.55);"></div>
+<div id="h2xCard" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:1000001;background:#15151f;color:#fff;padding:26px 24px 22px;font-family:sans-serif;text-align:center;border-radius:18px;border:2px solid #7c4dff;box-shadow:0 10px 40px rgba(0,0,0,.55);width:80%;max-width:320px;">
+  <span onclick="h2xClose()" style="position:absolute;top:6px;right:14px;cursor:pointer;font-size:22px;color:#9aa;">\u2715</span>
+  <div style="font-size:34px;">\U0001F916</div>
+  <div style="font-size:19px;font-weight:bold;margin-top:8px;">Hosting2X_Robot</div>
+  <div style="font-size:13px;opacity:.85;margin:6px 0 16px;">Telegram Bot Hosting Service \u00b7 Secure &amp; Fast</div>
+  <a href="https://t.me/HOSTING2X_ROBOT" onclick="event.stopPropagation()" style="display:inline-block;background:#7c4dff;color:#fff;text-decoration:none;padding:11px 28px;border-radius:24px;font-size:14px;">\U0001F449 Open Telegram</a>
 </div>
-<script>function h2xOpen(){document.getElementById('h2xCard').style.display='block';}</script>
+<script>
+function h2xOpen(){document.getElementById('h2xOverlay').style.display='block';document.getElementById('h2xCard').style.display='block';}
+function h2xClose(){document.getElementById('h2xOverlay').style.display='none';document.getElementById('h2xCard').style.display='none';}
+</script>
 """
     try:
         if ftype == 'zip':
@@ -6495,10 +6500,7 @@ def _apk_send_build(user_id, app_name, build_folder=None, chat_id=None, html_tex
                                   "━━━━━━━━━━━━━\n"
                                   "✨ Real installable Android app\n"
                                   "🧩 Version: 1.0\n"
-                                  "🤖 Made with <b>Hosting2X_Robot</b>\n"
-                                  "━━━━━━━━━━━━━\n"
-                                  "💬 \"Your ideas, built to reach the world.\"\n"
-                                  "➜ Interact like a normal app on your phone."),
+                                  "🤖 Made with <b>Hosting2X_Robot</b>"),
                               parse_mode='HTML',
                               disable_web_page_preview=True)
             return True
