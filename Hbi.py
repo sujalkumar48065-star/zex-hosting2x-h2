@@ -6308,8 +6308,21 @@ def _apk_logo_catcher(message):
 
 def _apk_save_logo(user_id, logo_bytes):
     user_folder = get_apk_user_folder(user_id)
+    png_data = logo_bytes
+    try:
+        if logo_bytes and logo_bytes[:8] != b"\x89PNG\r\n\x1a\n":
+            from PIL import Image
+            import io as _io
+            im = Image.open(_io.BytesIO(logo_bytes))
+            im = im.convert("RGBA")
+            im.thumbnail((192, 192), Image.LANCZOS)
+            _buf = _io.BytesIO()
+            im.save(_buf, "PNG")
+            png_data = _buf.getvalue()
+    except Exception as e:
+        logger.error(f"APK logo PNG convert failed for {user_id}: {e}", exc_info=True)
     with open(os.path.join(user_folder, 'logo.png'), 'wb') as f:
-        f.write(logo_bytes)
+        f.write(png_data)
 
 @bot.message_handler(func=lambda m: apk_sessions.get(m.from_user.id, {}).get('stage') == 'name')
 def _apk_name_catcher(message):
@@ -6370,6 +6383,8 @@ def _apk_build_app(key):
         return None
     src_folder = get_apk_user_folder(uid)
     build_folder = get_apk_build_folder(uid, name)
+    if os.path.isdir(build_folder):
+        shutil.rmtree(build_folder, ignore_errors=True)
     ftype = ent.get('ftype', 'html')
     file_name = ent.get('file', 'index.html')
     branding = """
@@ -6395,7 +6410,13 @@ function h2xClose(){document.getElementById('h2xOverlay').style.display='none';d
             if os.path.exists(zip_path):
                 import zipfile as _zf
                 with _zf.ZipFile(zip_path) as z:
-                    z.extractall(build_folder)
+                    _zb = _zip_bomb_check(z)
+                    if _zb:
+                        raise zipfile.BadZipFile(_zb)
+                    for _m in z.namelist():
+                        if _m.startswith('/') or '..' in _m:
+                            continue
+                        z.extract(_m, build_folder)
         else:
             src_html = os.path.join(src_folder, file_name)
             if os.path.exists(src_html):
@@ -6484,7 +6505,8 @@ def _apk_send_build(user_id, app_name, build_folder=None, chat_id=None, html_tex
         if apk_builder is not None:
             try:
                 built = apk_builder.build_webview_apk(
-                    indexed_html, indexed_logo, user_id, app_name, apk_path) is not None
+                    indexed_html, indexed_logo, user_id, app_name, apk_path,
+                    asset_dir=build_folder) is not None
             except Exception as e2:
                 logger.error(f"APK build tool failed user {user_id}: {e2}", exc_info=True)
                 built = False
@@ -7013,6 +7035,9 @@ def apk_approve_callback(call):
     uid = ent['uid']
     build_folder = _apk_build_app(key)
     if not build_folder:
+        if key in apk_manifest:
+            apk_manifest[key]['status'] = 'failed'
+            _save_apk_manifest()
         _apk_refund(uid)
         bot.answer_callback_query(call.id, "\u274C build failed \u2014 credit refunded", show_alert=True)
         return
@@ -7132,6 +7157,10 @@ def apk_del_callback(call):
         zip_path = os.path.join(APK_BUILD_DIR, f"{uid}_{name}.zip")
         if os.path.exists(zip_path):
             try: os.remove(zip_path)
+            except Exception: pass
+        apk_path = os.path.join(APK_BUILD_DIR, f"{uid}_{name}.apk")
+        if os.path.exists(apk_path):
+            try: os.remove(apk_path)
             except Exception: pass
         bot.answer_callback_query(call.id, "\U0001F5D1\uFE0F deleted")
         try:
@@ -9158,7 +9187,10 @@ def cleanup():
 atexit.register(cleanup)
 
 # --- Catch-all: stray text/messages -> show menu (registered LAST) ---
-@bot.message_handler(func=lambda m: True, content_types=['text'])
+@bot.message_handler(func=lambda m: (m.from_user.id not in apk_sessions
+                                     and m.from_user.id not in web_sessions
+                                     and m.from_user.id not in wa_sessions
+                                     and m.from_user.id not in deploy_sessions), content_types=['text'])
 def _logic_stray_text(message):
     _touch_user(message.from_user.id)
     t = (message.text or '').strip()

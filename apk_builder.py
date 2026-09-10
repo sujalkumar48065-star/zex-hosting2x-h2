@@ -149,12 +149,16 @@ def _pick_icon(logo_bytes, has_pil):
                 from PIL import Image
                 import io
                 im = Image.open(io.BytesIO(logo_bytes))
-                if im.mode != "RGB":
-                    im = im.convert("RGB")
+                if im.mode not in ("RGBA", "RGB"):
+                    im = im.convert("RGBA")
                 im.thumbnail((192, 192), Image.LANCZOS)
-                from io import BytesIO
+                bg = Image.new("RGBA", im.size, (0, 0, 0, 0))
+                if im.mode == "RGBA":
+                    bg.paste(im, (0, 0), im)
+                else:
+                    bg = im.convert("RGBA")
                 buf = io.BytesIO()
-                im.save(buf, "PNG")
+                bg.save(buf, "PNG")
                 return buf.getvalue()
         except Exception as e:
             _log(f"icon pil convert failed: {e}")
@@ -169,8 +173,9 @@ def _sanitize_label(name):
     return label[:40] or "Hosting2X"
 
 
-def build_webview_apk(html, logo_bytes, user_id, app_name, out_path):
-    """Build real APK from raw html + optional logo. Returns out_path or None."""
+def build_webview_apk(html, logo_bytes, user_id, app_name, out_path, asset_dir=None):
+    """Build real APK from raw html + optional logo.
+    If asset_dir is given, all its files are copied into assets/ (multi-file sites)."""
     for t in TOOLS.values():
         if not os.path.exists(t):
             _log(f"missing apk tool: {t}")
@@ -197,6 +202,14 @@ def build_webview_apk(html, logo_bytes, user_id, app_name, out_path):
         _write_mipmap(res_dir, icon)
         assets_dir = os.path.join(work, "assets")
         os.makedirs(assets_dir, exist_ok=True)
+        if asset_dir and os.path.isdir(asset_dir):
+            for root2, _dirs, files2 in os.walk(asset_dir):
+                for fn2 in files2:
+                    full = os.path.join(root2, fn2)
+                    rel = os.path.relpath(full, asset_dir)
+                    dst = os.path.join(assets_dir, rel)
+                    os.makedirs(os.path.dirname(dst), exist_ok=True)
+                    shutil.copy(full, dst)
         with open(os.path.join(assets_dir, "index.html"), "wb") as f:
             f.write(html.encode("utf-8", "ignore") if isinstance(html, str) else html)
         manifest = f'''<?xml version="1.0" encoding="utf-8"?>
