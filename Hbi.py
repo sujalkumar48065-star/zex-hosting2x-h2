@@ -5882,11 +5882,9 @@ def _logic_apk_credit_menu(message):
     markup = types.InlineKeyboardMarkup(row_width=2)
     if not unlimited:
         packs = [
-            ("3 ᴄʀᴇᴅɪᴛꜱ — ₹49", "buycredit_3"),
-            ("5 ᴄʀᴇᴅɪᴛꜱ — ₹79", "buycredit_5"),
-            ("10 ᴄʀᴇᴅɪᴛꜱ — ₹149", "buycredit_10"),
-            ("25 ᴄʀᴇᴅɪᴛꜱ — ₹349", "buycredit_25"),
-            ("50 ᴄʀᴇᴅɪᴛꜱ — ₹649", "buycredit_50"),
+            ("1 ᴄʀᴇᴅɪᴛ — ₹5", "buycredit_1"),
+            ("10 ᴄʀᴇᴅɪᴛꜱ — ₹40", "buycredit_10"),
+            ("30 ᴄʀᴇᴅɪᴛꜱ — ₹110", "buycredit_30"),
         ]
         for label, cb in packs:
             markup.add(types.InlineKeyboardButton(label, callback_data=cb))
@@ -5901,11 +5899,9 @@ def apk_buy_credit_callback(call):
         return
     data = call.data
     pack_map = {
-        "buycredit_3": ("3 credits", "₹49"),
-        "buycredit_5": ("5 credits", "₹79"),
-        "buycredit_10": ("10 credits", "₹149"),
-        "buycredit_25": ("25 credits", "₹349"),
-        "buycredit_50": ("50 credits", "₹649"),
+        "buycredit_1": ("1 credit", "₹5"),
+        "buycredit_10": ("10 credits", "₹40"),
+        "buycredit_30": ("30 credits", "₹110"),
     }
     credits, price = pack_map.get(data, ("pack", "₹--"))
     try:
