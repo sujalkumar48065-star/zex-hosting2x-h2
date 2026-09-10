@@ -6196,7 +6196,7 @@ def _apk_handle_file_upload(message):
             apk_sessions.pop(user_id, None)
             bot.reply_to(message, "\U0001F4B3 no credits left \u2014 contact " + YOUR_USERNAME)
             return
-        file_name = doc.file_name
+        file_name = os.path.basename(doc.file_name or '')
         if not file_name:
             bot.reply_to(message, "\u2754 file name missing.")
             return
@@ -6921,8 +6921,10 @@ def apk_approve_callback(call):
     key = _apk_parse_key(call)
     ent = apk_pending_reviews.pop(key, None)
     if not ent:
-        bot.answer_callback_query(call.id, "\u26A0\uFE0F expired", show_alert=True)
-        return
+        ent = apk_manifest.get(key)
+        if not ent or ent.get('status') != 'pending':
+            bot.answer_callback_query(call.id, "\u26A0\uFE0F expired", show_alert=True)
+            return
     uid = ent['uid']
     build_folder = _apk_build_app(key)
     if not build_folder:
@@ -6954,8 +6956,10 @@ def apk_reject_callback(call):
     key = _apk_parse_key(call)
     ent = apk_pending_reviews.pop(key, None)
     if not ent:
-        bot.answer_callback_query(call.id, "\u26A0\uFE0F expired", show_alert=True)
-        return
+        ent = apk_manifest.get(key)
+        if not ent or ent.get('status') != 'pending':
+            bot.answer_callback_query(call.id, "\u26A0\uFE0F expired", show_alert=True)
+            return
     uid = ent['uid']
     if key in apk_manifest:
         apk_manifest[key]['status'] = 'rejected'
