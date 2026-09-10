@@ -2930,7 +2930,8 @@ def create_reply_keyboard_apk_menu(user_id):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     layout = [
         ["⬆️ ᴀᴘᴋ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ", "📱 ᴍʏ ᴀᴘᴋ"],
-        ["👤 ᴍʏ ᴀᴄᴄᴏᴜɴᴛ", "🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"]
+        ["💳 ᴄʀᴇᴅɪᴛ", "👤 ᴍʏ ᴀᴄᴄᴏᴜɴᴛ"],
+        ["🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"]
     ]
     for row_buttons_text in layout:
         markup.add(*[types.KeyboardButton(text) for text in row_buttons_text])
@@ -5859,6 +5860,27 @@ def _logic_apk_back(message):
     wa_sessions.pop(user_id, None)
     bot.reply_to(message, "\U0001F4C2 ᴍᴀɪɴ ᴍᴇɴᴜ \U0001F447", reply_markup=create_reply_keyboard_main_menu(user_id))
 
+def _logic_apk_credit_menu(message):
+    user_id = message.from_user.id
+    if is_user_banned(user_id):
+        bot.reply_to(message, "\u26D4 your account is restricted from this bot.")
+        return
+    is_subscribed, not_joined = check_mandatory_subscription(user_id)
+    if not is_subscribed and user_id not in admin_ids:
+        subscription_message, markup = create_subscription_check_message(not_joined)
+        bot.reply_to(message, subscription_message, reply_markup=markup, parse_mode='Markdown')
+        return
+    bal = _apk_credit_text(user_id)
+    unlimited = _apk_unlimited(user_id)
+    credit_text = (
+        "💳 **Credits**\n\n"
+        f"💰 Your Balance: `{bal}`\n"
+        f"📱 APK builds cost: 1 credit each\n\n"
+        + ("" if unlimited else "🛒 To buy credits / get top-up, contact:\n👑 @duifioookn2\n\n")
+        + "🔁 Credits are auto-refunded if your APK is rejected or build fails."
+    )
+    bot.reply_to(message, credit_text, parse_mode='Markdown', reply_markup=create_reply_keyboard_apk_menu(user_id))
+
 BUTTON_TEXT_TO_LOGIC_EXTRA = {
     WA_BTN_MAIN: _logic_wa_main_menu,
     WA_BTN_UPLOAD: _logic_wa_upload,
@@ -5871,6 +5893,7 @@ BUTTON_TEXT_TO_LOGIC_EXTRA = {
     APK_BTN_MY: _logic_apk_my,
     APK_BTN_ACCOUNT: _logic_apk_account,
     APK_BTN_BACK: _logic_apk_back,
+    "💳 ᴄʀᴇᴅɪᴛ": _logic_apk_credit_menu,
 }
 
 BUTTON_TEXT_TO_LOGIC = {
