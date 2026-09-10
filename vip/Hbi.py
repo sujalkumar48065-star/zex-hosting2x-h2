@@ -2930,7 +2930,7 @@ def create_reply_keyboard_apk_menu(user_id):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     layout = [
         ["⬆️ ᴀᴘᴋ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ", "📱 ᴍʏ ᴀᴘᴋ"],
-        ["💳 ᴄʀᴇᴅɪᴛ", "👤 ᴍʏ ᴀᴄᴄᴏᴜɴᴛ"],
+        ["🛒 ʙᴜʏ ᴄʀᴇᴅɪᴛ", "👤 ᴍʏ ᴀᴄᴄᴏᴜɴᴛ"],
         ["🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"]
     ]
     for row_buttons_text in layout:
@@ -5873,13 +5873,123 @@ def _logic_apk_credit_menu(message):
     bal = _apk_credit_text(user_id)
     unlimited = _apk_unlimited(user_id)
     credit_text = (
-        "💳 **Credits**\n\n"
+        "🛒 **Buy Credits**\n\n"
         f"💰 Your Balance: `{bal}`\n"
         f"📱 APK builds cost: 1 credit each\n\n"
-        + ("" if unlimited else "🛒 To buy credits / get top-up, contact:\n👑 @duifioookn2\n\n")
+        + ("" if unlimited else "👇 Pick a pack below, pay, and admin will add credits instantly:\n\n")
         + "🔁 Credits are auto-refunded if your APK is rejected or build fails."
     )
-    bot.reply_to(message, credit_text, parse_mode='Markdown', reply_markup=create_reply_keyboard_apk_menu(user_id))
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    if not unlimited:
+        packs = [
+            ("3 ᴄʀᴇᴅɪᴛꜱ — ₹49", "buycredit_3"),
+            ("5 ᴄʀᴇᴅɪᴛꜱ — ₹79", "buycredit_5"),
+            ("10 ᴄʀᴇᴅɪᴛꜱ — ₹149", "buycredit_10"),
+            ("25 ᴄʀᴇᴅɪᴛꜱ — ₹349", "buycredit_25"),
+            ("50 ᴄʀᴇᴅɪᴛꜱ — ₹649", "buycredit_50"),
+        ]
+        for label, cb in packs:
+            markup.add(types.InlineKeyboardButton(label, callback_data=cb))
+    bot.send_message(message.chat.id, credit_text, parse_mode='Markdown',
+                     reply_markup=markup if not unlimited else None)
+    bot.send_message(message.chat.id, "\U0001F4C2 ᴀᴘᴋ ᴍᴇɴᴜ \U0001F447", reply_markup=create_reply_keyboard_apk_menu(user_id))
+
+def apk_buy_credit_callback(call):
+    user_id = call.from_user.id
+    if is_user_banned(user_id):
+        bot.answer_callback_query(call.id, "\u26D4 restricted", show_alert=True)
+        return
+    data = call.data
+    pack_map = {
+        "buycredit_3": ("3 credits", "₹49"),
+        "buycredit_5": ("5 credits", "₹79"),
+        "buycredit_10": ("10 credits", "₹149"),
+        "buycredit_25": ("25 credits", "₹349"),
+        "buycredit_50": ("50 credits", "₹649"),
+    }
+    credits, price = pack_map.get(data, ("pack", "₹--"))
+    try:
+        bot.answer_callback_query(call.id, f"📦 {credits} selected — check payment info", show_alert=True)
+    except Exception:
+        pass
+    uname = (call.from_user.username or call.from_user.first_name or str(user_id))
+    # notify admins with approve buttons
+    for adm in admin_ids:
+        try:
+            bot.send_message(
+                adm,
+                f"🛒 **Credit Purchase Request**\n\n"
+                f"👤 User: {uname}\n🆔 ID: `{user_id}`\n"
+                f"📦 Pack: {credits}\n💰 Amount: {price}\n"
+                f"💳 Balance: `{_apk_credit_text(user_id)}`\n\n"
+                f"Payment confirm hote hi credits add karo \u2193",
+                reply_markup=types.InlineKeyboardMarkup().add(
+                    types.InlineKeyboardButton(f"✅ Add {credits}", callback_data=f"buycreditok_{user_id}_{data.strip('buycredit_')}"),
+                    types.InlineKeyboardButton("❌ Deny", callback_data=f"buycreditno_{user_id}")
+                ),
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logger.error(f"buy credit notify admin {adm} failed: {e}", exc_info=True)
+    # tell user how to pay
+    pay_text = (
+        "🧾 **Payment Instructions**\n\n"
+        f"📦 Pack: `{credits}`\n"
+        f"💰 Amount: `{price}`\n\n"
+        f"💳 ʙᴀɴᴋ/ᴜᴘɪ ᴅᴇᴛᴀɪʟꜱ:\n`{YOUR_USERNAME}`\n\n"
+        "✅ Send screenshot of payment to the admin above.\n"
+        "🔁 Admin will add credits instantly after confirm."
+    )
+    bot.send_message(user_id, pay_text, parse_mode='Markdown')
+
+def apk_buy_credit_ok_callback(call):
+    if call.from_user.id not in admin_ids:
+        bot.answer_callback_query(call.id, "\U0001F512 staff only", show_alert=True)
+        return
+    parts = call.data.split('_')
+    try:
+        target_uid = int(parts[1])
+        amount = int(parts[2])
+    except (ValueError, IndexError):
+        bot.answer_callback_query(call.id, "❌ bad request", show_alert=True)
+        return
+    apk_credits[target_uid] = _apk_credit(target_uid) + amount
+    _apk_save_credentials()
+    bot.answer_callback_query(call.id, f"✅ +{amount} credits added", show_alert=True)
+    try:
+        bot.edit_message_text(
+            f"✅ **Credit Purchase Approved**\n\n🆔 `{target_uid}` += `{amount}` credits",
+            call.message.chat.id, call.message.message_id, parse_mode='Markdown')
+    except Exception:
+        pass
+    try:
+        bot.send_message(target_uid,
+                         f"✅ **Payment confirmed!** `{amount}` credits added.\n"
+                         f"💳 New balance: `{_apk_credit_text(target_uid)}`",
+                         parse_mode='Markdown')
+    except Exception as e:
+        logger.error(f"buy credit confirm notify {target_uid}: {e}", exc_info=True)
+
+def apk_buy_credit_no_callback(call):
+    if call.from_user.id not in admin_ids:
+        bot.answer_callback_query(call.id, "\U0001F512 staff only", show_alert=True)
+        return
+    parts = call.data.split('_')
+    try:
+        target_uid = int(parts[1])
+    except (ValueError, IndexError):
+        bot.answer_callback_query(call.id, "❌ bad request", show_alert=True)
+        return
+    bot.answer_callback_query(call.id, "❌ denied", show_alert=True)
+    try:
+        bot.edit_message_text(f"❌ Purchase denied for `{target_uid}`",
+                              call.message.chat.id, call.message.message_id, parse_mode='Markdown')
+    except Exception:
+        pass
+    try:
+        bot.send_message(target_uid, "❌ Your credit purchase was denied. Contact admin if you paid.", parse_mode='Markdown')
+    except Exception as e:
+        logger.error(f"buy credit deny notify {target_uid}: {e}", exc_info=True)
 
 BUTTON_TEXT_TO_LOGIC_EXTRA = {
     WA_BTN_MAIN: _logic_wa_main_menu,
@@ -5893,7 +6003,7 @@ BUTTON_TEXT_TO_LOGIC_EXTRA = {
     APK_BTN_MY: _logic_apk_my,
     APK_BTN_ACCOUNT: _logic_apk_account,
     APK_BTN_BACK: _logic_apk_back,
-    "💳 ᴄʀᴇᴅɪᴛ": _logic_apk_credit_menu,
+    "🛒 ʙᴜʏ ᴄʀᴇᴅɪᴛ": _logic_apk_credit_menu,
 }
 
 BUTTON_TEXT_TO_LOGIC = {
@@ -7315,6 +7425,10 @@ def handle_callbacks(call):
         elif data == 'apk_back': apk_back_callback(call)
         elif data == 'apkcreditadd': apk_credit_add_callback(call)
         elif data == 'apkcreditrm': apk_credit_rm_callback(call)
+        elif data.startswith('buycredit_'):
+            apk_buy_credit_callback(call)
+        elif data.startswith('buycreditok_'): apk_buy_credit_ok_callback(call)
+        elif data.startswith('buycreditno_'): apk_buy_credit_no_callback(call)
         elif data == 'apkstats': apk_stats_callback(call)
         elif data.startswith('gapprove_'): admin_required_callback(call, process_approve_gh)
         elif data.startswith('greject_'): admin_required_callback(call, process_reject_gh)
