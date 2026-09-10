@@ -389,6 +389,12 @@ SECURITY_CONFIG = {
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+try:
+    import apk_builder
+    apk_builder.set_logger(logger)
+except Exception as _ae:
+    logger.error(f"apk_builder import failed: {_ae}", exc_info=True)
+    apk_builder = None
 
 # --- Command Button Layouts ---
 COMMAND_BUTTONS_LAYOUT_USER_SPEC = [
@@ -5961,7 +5967,8 @@ def ping(message):
     bot.edit_message_text(f"Pong! Latency: {latency} ms", message.chat.id, msg.message_id)
 
 # --- Document (File) Handler ---
-@bot.message_handler(content_types=['document'])
+# NOTE: called ONLY via _web_doc_catcher (single registration) so each
+# document is processed exactly once (no double-fire from a second handler).
 def handle_file_upload_doc(message):
     user_id = message.from_user.id
     chat_id = message.chat.id
@@ -6425,25 +6432,84 @@ def _apk_build_app(key):
         logger.error(f"APK build error for {key}: {e}", exc_info=True)
         return None
 
-def _apk_send_build(build_folder, user_id, app_name, chat_id=None):
-    """Zip the built app and send to user."""
+def _apk_send_build(user_id, app_name, build_folder=None, chat_id=None, html_text=None, logo_bytes=None):
+    """Build and send the REAL .apk (WebView wrapper) built from the user's HTML.
+    Falls back to a zip bundle only if the APK toolchain/build fails."""
     try:
         os.makedirs(APK_BUILD_DIR, exist_ok=True)
-        zip_path = os.path.join(APK_BUILD_DIR, f"{user_id}_{app_name}.zip")
+        target = chat_id or user_id
+
+        indexed_html = html_text
+        indexed_logo = logo_bytes
+        if build_folder:
+            idx = None
+            for cand in ('index.html', 'index.htm', 'default.html'):
+                p = os.path.join(build_folder, cand)
+                if os.path.exists(p):
+                    idx = p
+                    break
+            if not idx:
+                for root2, _, files2 in os.walk(build_folder):
+                    for fn2 in files2:
+                        if fn2.lower().endswith(('.html', '.htm')):
+                            idx = os.path.join(root2, fn2)
+                            break
+                    if idx:
+                        break
+            if idx and not indexed_html:
+                with open(idx, 'r', encoding='utf-8', errors='ignore') as f:
+                    indexed_html = f.read()
+            if not indexed_logo:
+                lg = os.path.join(build_folder, 'logo.png')
+                if os.path.exists(lg):
+                    with open(lg, 'rb') as f:
+                        indexed_logo = f.read()
+
+        if not indexed_html:
+            bot.send_message(target, "\U0001F4E5 build folder missing html — nothing to package.")
+            return False
+
+        apk_name = os.path.join(APK_BUILD_DIR, f"{user_id}_{app_name}")
+        apk_path = f"{apk_name}.apk"
+        if os.path.exists(apk_path):
+            os.remove(apk_path)
+        built = False
+        if apk_builder is not None:
+            try:
+                built = apk_builder.build_webview_apk(
+                    indexed_html, indexed_logo, user_id, app_name, apk_path) is not None
+            except Exception as e2:
+                logger.error(f"APK build tool failed user {user_id}: {e2}", exc_info=True)
+                built = False
+        if built and os.path.exists(apk_path):
+            with open(apk_path, 'rb') as f:
+                data = f.read()
+            if len(data) > 49 * 1024 * 1024:
+                bot.send_message(target, "⚠️ APK too large (49MB+). try lighter html.")
+                return False
+            bot.send_document(target, data, visible_file_name=f"{app_name}.apk",
+                              caption=f"\U0001F4F1 **{app_name}.apk**\nReal installable Android app — Made with Hosting2X_Robot \U0001F916")
+            return True
+
+        zip_path = f"{apk_name}.zip"
         if os.path.exists(zip_path):
             os.remove(zip_path)
         import zipfile as _zf
         with _zf.ZipFile(zip_path, 'w', _zf.ZIP_DEFLATED) as z:
-            for root2, _, files2 in os.walk(build_folder):
-                for fn2 in files2:
-                    full = os.path.join(root2, fn2)
-                    rel = os.path.relpath(full, build_folder)
-                    z.write(full, rel)
+            if build_folder and os.path.isdir(build_folder):
+                for root2, _, files2 in os.walk(build_folder):
+                    for fn2 in files2:
+                        full = os.path.join(root2, fn2)
+                        rel = os.path.relpath(full, build_folder)
+                        z.write(full, rel)
+            else:
+                z.writestr('index.html', indexed_html.encode('utf-8', 'ignore'))
+                if indexed_logo:
+                    z.writestr('logo.png', indexed_logo)
         with open(zip_path, 'rb') as f:
             data = f.read()
-        target = chat_id or user_id
         bot.send_document(target, data, visible_file_name=f"{app_name}.apk.zip",
-                          caption=f"\U0001F4F1 **{app_name}.apk**\nMade with Hosting2X_Robot \U0001F916")
+                          caption=f"\U0001F4F1 **{app_name}.apk** (zip fallback)\nMade with Hosting2X_Robot \U0001F916")
         return True
     except Exception as e:
         logger.error(f"APK send error user {user_id}: {e}", exc_info=True)
@@ -6948,7 +7014,7 @@ def apk_approve_callback(call):
             "\U0001F447 Download below \U0001F447")
     except Exception as e:
         logger.error(f"Failed to notify user {uid} APK approved: {e}")
-    _apk_send_build(build_folder, uid, ent['name'])
+    _apk_send_build(uid, ent['name'], build_folder=build_folder)
 
 def apk_reject_callback(call):
     if call.from_user.id not in admin_ids:
@@ -7024,7 +7090,7 @@ def apk_dl_callback(call):
             bot.answer_callback_query(call.id, "\u26A0\uFE0F Build missing \u2014 re-upload karo.", show_alert=True)
             return
         bot.answer_callback_query(call.id, "\u2B07\uFE0F sending...")
-        _apk_send_build(build_folder, uid, name, chat_id=call.message.chat.id)
+        _apk_send_build(uid, name, build_folder=build_folder, chat_id=call.message.chat.id)
     except Exception as e:
         logger.error(f"apk_dl error '{call.data}': {e}", exc_info=True)
 
