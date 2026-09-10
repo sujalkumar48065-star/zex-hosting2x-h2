@@ -2349,8 +2349,13 @@ def get_apk_user_folder(user_id):
     os.makedirs(user_folder, exist_ok=True)
     return user_folder
 
+def _apk_safe_name(app_name):
+    """Filesystem-safe version of user app name (keeps display name untouched)."""
+    safe = re.sub(r'[^A-Za-z0-9_\-\. ]+', '_', str(app_name)).strip().strip('.')
+    return (safe or 'app')
+
 def get_apk_build_folder(user_id, app_name):
-    folder = os.path.join(APK_BUILD_DIR, str(user_id), app_name)
+    folder = os.path.join(APK_BUILD_DIR, str(user_id), _apk_safe_name(app_name))
     os.makedirs(folder, exist_ok=True)
     return folder
 
@@ -6521,8 +6526,8 @@ def _apk_name_catcher(message):
     if not name:
         bot.reply_to(message, "\u2754 kuch bhejo na.")
         return
-    if not re.fullmatch(r'[A-Za-z0-9_]{3,30}', name):
-        bot.reply_to(message, "\u2753 name 3-30 chars & letters/numbers/_ only.")
+    if not re.fullmatch(r'[A-Za-z0-9_\-\. ]{2,30}', name) or not re.search(r'[A-Za-z0-9]', name):
+        bot.reply_to(message, "\u2753 name 2-30 chars \u2014 letters/numbers/space/_/-/. only, need letter or number.")
         return
     for k, v in list(apk_manifest.items()):
         if v.get('uid') == user_id and str(v.get('name', '')).lower() == name.lower():
@@ -6680,7 +6685,7 @@ def _apk_send_build(user_id, app_name, build_folder=None, chat_id=None, html_tex
 
         safe_name = str(app_name).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
-        apk_name = os.path.join(APK_BUILD_DIR, f"{user_id}_{app_name}")
+        apk_name = os.path.join(APK_BUILD_DIR, f"{user_id}_{_apk_safe_name(app_name)}")
         apk_path = f"{apk_name}.apk"
         if os.path.exists(apk_path):
             os.remove(apk_path)
@@ -7341,7 +7346,7 @@ def apk_del_callback(call):
         if os.path.exists(zip_path):
             try: os.remove(zip_path)
             except Exception: pass
-        apk_path = os.path.join(APK_BUILD_DIR, f"{uid}_{name}.apk")
+        apk_path = os.path.join(APK_BUILD_DIR, f"{uid}_{_apk_safe_name(name)}.apk")
         if os.path.exists(apk_path):
             try: os.remove(apk_path)
             except Exception: pass
