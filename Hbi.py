@@ -4085,7 +4085,7 @@ def apk_credit_add_callback(call):
         return
     bot.answer_callback_query(call.id, "✍️ send user id + amount")
     bot.send_message(call.message.chat.id,
-                     "💳 **Add APK Credit**\n\nUser ID aur amount bhejo:\n`<user_id> <amount>`\n/cancel to quit")
+                     "\U0001F4B3 **Add APK Credit**\n\nSend user ID and amount:\n`<user_id> <amount>`\n/cancel to quit")
     bot.register_next_step_handler(call.message, lambda m: _process_apk_credit_change(m, add=True))
 
 def apk_credit_rm_callback(call):
@@ -4094,7 +4094,7 @@ def apk_credit_rm_callback(call):
         return
     bot.answer_callback_query(call.id, "✍️ send user id + amount")
     bot.send_message(call.message.chat.id,
-                     "➖ **Remove APK Credit**\n\nUser ID aur amount bhejo:\n`<user_id> <amount>`\n/cancel to quit")
+                     "\u2796 **Remove APK Credit**\n\nSend user ID and amount:\n`<user_id> <amount>`\n/cancel to quit")
     bot.register_next_step_handler(call.message, lambda m: _process_apk_credit_change(m, add=False))
 
 def _process_apk_credit_change(message, add=True):
@@ -4104,21 +4104,21 @@ def _process_apk_credit_change(message, add=True):
         return
     parts = (message.text or '').strip().split()
     if len(parts) != 2:
-        bot.reply_to(message, "\u274C format galat: `<user_id> <amount>`")
+        bot.reply_to(message, "\u274C Invalid format: `<user_id> <amount>`")
         return
     try:
         target_uid = int(parts[0])
         amount = int(parts[1])
     except (TypeError, ValueError):
-        bot.reply_to(message, "\u274C user id aur amount numbers me do.")
+        bot.reply_to(message, "\u274C user ID and amount must be numbers.")
         return
     if amount <= 0:
-        bot.reply_to(message, "\u274C amount positive rakho.")
+        bot.reply_to(message, "\u274C amount must be positive.")
         return
     if add:
         cur = _apk_credit(target_uid)
         if cur == float('inf'):
-            bot.reply_to(message, "\u26A0\uFE0F us user ke credits unlimited hain.")
+            bot.reply_to(message, "\u26A0\uFE0F this user has unlimited credits.")
             return
         apk_credits[target_uid] = cur + amount
         _apk_save_credentials()
@@ -4126,7 +4126,7 @@ def _process_apk_credit_change(message, add=True):
     else:
         cur = _apk_credit(target_uid)
         if cur == float('inf'):
-            bot.reply_to(message, "\u26A0\uFE0F us user ke credits unlimited hain.")
+            bot.reply_to(message, "\u26A0\uFE0F this user has unlimited credits.")
             return
         if amount >= cur:
             apk_credits[target_uid] = 0
@@ -5722,7 +5722,7 @@ def _process_wa_install_module(message):
         return
     module_name = (message.text or '').strip()
     if not module_name:
-        bot.reply_to(message, "\u2754 kuch bhejo na.")
+        bot.reply_to(message, "\u2754 please send a module name.")
         return
     if module_name.lower().startswith('npm:'):
         module_name = module_name[4:].strip()
@@ -5838,6 +5838,15 @@ def _logic_apk_upload(message):
     if _apk_credit(user_id) <= 0:
         bot.reply_to(message, "\U0001F4B3 no credits left \u2014 buy or wait for admin top-up \u2192 contact " + YOUR_USERNAME)
         return
+    old_sess = apk_sessions.pop(user_id, None)
+    if old_sess and old_sess.get('file'):
+        try:
+            user_folder = get_apk_user_folder(user_id)
+            old_path = os.path.join(user_folder, old_sess['file'])
+            if os.path.exists(old_path):
+                os.remove(old_path)
+        except Exception:
+            pass
     apk_sessions[user_id] = {'stage': 'file'}
     bot.reply_to(message, "\U0001F3AF ꜱᴇɴᴅ `.html` · `.zip` ꜰɪʟᴇ\nᴛɪᴘ: ᴛᴀᴘ ⬆️ ᴀᴘᴋ ᴜᴘʟᴏᴀᴅ ꜰɪʟᴇ ᴛʜᴇɴ ꜱᴇɴᴅ ᴛʜᴇ ꜰɪʟᴇ", parse_mode='Markdown')
 
@@ -5949,7 +5958,7 @@ def apk_buy_credit_callback(call):
                 f"👤 User: {uname}\n🆔 ID: `{user_id}`\n"
                 f"📦 Pack: {credits}\n💰 Amount: {price}\n"
                 f"💳 Balance: `{_apk_credit_text(user_id)}`\n\n"
-                f"Payment confirm hote hi credits add karo \u2193",
+                "Credits will be added once payment is confirmed \u2193",
                 reply_markup=types.InlineKeyboardMarkup().add(
                     types.InlineKeyboardButton(f"✅ Add {credits}", callback_data=f"buycreditok_{user_id}_{data.replace('buycredit_', '')}"),
                     types.InlineKeyboardButton("❌ Deny", callback_data=f"buycreditno_{user_id}")
@@ -6426,7 +6435,7 @@ def _apk_handle_file_upload(message):
                     if not has_html:
                         os.remove(zip_path)
                         apk_sessions.pop(user_id, None)
-                        bot.reply_to(message, "\U0001F6D1 zip me `.html` file nahi mili.")
+                        bot.reply_to(message, "\U0001F6D1 No `.html` file found in zip.")
                         return
                 except _zf.BadZipFile as e:
                     os.remove(zip_path)
@@ -6524,14 +6533,14 @@ def _apk_name_catcher(message):
         return
     name = (message.text or '').strip()
     if not name:
-        bot.reply_to(message, "\u2754 kuch bhejo na.")
+        bot.reply_to(message, "\u2754 please enter a name.")
         return
     if not re.fullmatch(r'[A-Za-z0-9_\-\. ]{2,30}', name) or not re.search(r'[A-Za-z0-9]', name):
-        bot.reply_to(message, "\u2753 name 2-30 chars \u2014 letters/numbers/space/_/-/. only, need letter or number.")
+        bot.reply_to(message, "\u2753 name 2-30 chars \u2014 letters/numbers/space/_/-/. only, need letter or number.\n/cancel to quit")
         return
     for k, v in list(apk_manifest.items()):
         if v.get('uid') == user_id and str(v.get('name', '')).lower() == name.lower():
-            bot.reply_to(message, "\u26A0\uFE0F is name se APK pehle se hai \u2014 alag name do.")
+            bot.reply_to(message, "\u26A0\uFE0F an APK with this name already exists \u2014 choose a different name.\n/cancel to quit")
             return
     sess['name'] = name
     apk_sessions[user_id] = sess
@@ -6632,8 +6641,9 @@ function h2xClose(){document.getElementById('h2xOverlay').style.display='none';d
         with open(index_found, 'r', encoding='utf-8', errors='ignore') as f:
             html = f.read()
         html = html.encode('utf-8', errors='ignore').decode('utf-8')
-        if '</body>' in html.lower():
-            html = html.replace('</body>', branding + '</body>')
+        body_match = re.search(r'</body>', html, re.IGNORECASE)
+        if body_match:
+            html = html[:body_match.start()] + branding + html[body_match.start():]
         else:
             html = html + branding
         with open(index_found, 'w', encoding='utf-8', errors='ignore') as f:
@@ -7152,26 +7162,27 @@ def apk_submit_callback(call):
     user_id = call.from_user.id
     sess = apk_sessions.get(user_id)
     if not sess or not sess.get('file') or not sess.get('name'):
-        bot.answer_callback_query(call.id, "⏳ pehle file aur name bhejo.", show_alert=True)
+        bot.answer_callback_query(call.id, "\u23F3 send file and name first.", show_alert=True)
         return
     if _apk_credit(user_id) <= 0:
         bot.answer_callback_query(call.id, "\U0001F4B3 no credits left.", show_alert=True)
         apk_sessions.pop(user_id, None)
         return
-    key = _apk_make_review(user_id, sess['name'], sess['file'], sess.get('ftype', 'html'))
+    saved_sess = dict(sess)
+    apk_sessions.pop(user_id, None)
+    key = _apk_make_review(user_id, saved_sess['name'], saved_sess['file'], saved_sess.get('ftype', 'html'))
     if not key:
+        apk_sessions[user_id] = saved_sess
         bot.answer_callback_query(call.id, "\U0001F4B3 no credits left.", show_alert=True)
-        apk_sessions.pop(user_id, None)
         return
-    _apk_refresh_apk_menus(call, key, sess['name'])
+    _apk_refresh_apk_menus(call, key, saved_sess['name'])
     bot.answer_callback_query(call.id, "\U0001F4AC submitted!")
     bot.send_message(user_id,
         "\U0001F4F1 **APK submitted!**\n\n"
-        f"\U0001F3F7 Name: `{sess['name']}`\n"
-        f"\U0001F4C4 File: `{sess['file']}`\n"
+        f"\U0001F3F7 Name: `{saved_sess['name']}`\n"
+        f"\U0001F4C4 File: `{saved_sess['file']}`\n"
         f"\U0001F4B3 Credit: `{_apk_credit_text(user_id)}`\n\n"
         "\U0001F514 admin approval aane pe notify hoga \U0001F447")
-    apk_sessions.pop(user_id, None)
 
 def _apk_refresh_apk_menus(call, key, app_name):
     """Notify all admins about a new pending APK review."""
@@ -7342,7 +7353,7 @@ def apk_del_callback(call):
         apk_pending_reviews.pop(key, None)
         build_folder = get_apk_build_folder(uid, name)
         shutil.rmtree(build_folder, ignore_errors=True)
-        zip_path = os.path.join(APK_BUILD_DIR, f"{uid}_{name}.zip")
+        zip_path = os.path.join(APK_BUILD_DIR, f"{uid}_{_apk_safe_name(name)}.zip")
         if os.path.exists(zip_path):
             try: os.remove(zip_path)
             except Exception: pass
