@@ -6721,8 +6721,7 @@ def _apk_send_build(user_id, app_name, build_folder=None, chat_id=None, html_tex
                                   "✨ Real installable Android app\n"
                                   "🧩 Version: 1.0\n"
                                   "🤖 Made with <b>Hosting2X_Robot</b>"),
-                              parse_mode='HTML',
-                              disable_web_page_preview=True)
+                              parse_mode='HTML')
             return True
 
         zip_path = f"{apk_name}.zip"
