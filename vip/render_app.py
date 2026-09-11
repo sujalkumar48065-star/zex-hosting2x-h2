@@ -372,17 +372,20 @@ def panel_wipe():
     if not _panel_ok(request.args):
         return jsonify(error='unauthorized'), 403, None
     removed = []
-    for name in ('hosting.db', 'projects', 'logs', 'tmp'):
-        p = os.path.join(DATA_DIR, name)
+    # panel-only remnants on container disk; NEVER touch logs/hbi_sub.log
+    # (Hbi subprocess log) and NEVER touch TiDB or vip/inf.
+    targets = ['hosting.db', 'projects', 'tmp', os.path.join('logs', 'hosting.log')]
+    for t in targets:
+        p = os.path.join(DATA_DIR, t)
         if os.path.exists(p):
             try:
                 if os.path.isdir(p):
                     shutil.rmtree(p)
                 else:
                     os.remove(p)
-                removed.append(name)
+                removed.append(t)
             except Exception as exc:
-                return jsonify(error=str(exc), failed=name), 500
+                return jsonify(error=str(exc), failed=t), 500
     return jsonify(removed=removed)
 
 
