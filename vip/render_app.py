@@ -338,55 +338,6 @@ def admin_hbi():
 
 
 _PANEL_SECRET = (os.environ.get('HOSTING_WEBHOOK_SECRET') or 's3cret_wbhk')
-_PANEL_TMP_KEY = 'fMAKfBOssrqntp8KlkHgmB_Cjs_56Fih'
-
-
-def _panel_ok(args):
-    k = args.get('key', '')
-    return k in (_PANEL_SECRET, _PANEL_TMP_KEY)
-
-
-@app.route('/panel/backup')
-def panel_backup_tar():
-    """TEMPORARY: one-shot download of VIP panel data (hosting.db + projects/)
-    from the container as a .tar.gz. TIER-0 safety: secret-guarded, does not
-    touch TiDB or the Hbi data dir (vip/inf)."""
-    if not _panel_ok(request.args):
-        return jsonify(error='unauthorized'), 403
-    import tarfile
-    from datetime import datetime
-    stamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-    out = os.path.join(DATA_DIR, f'panel_backup_{stamp}.tar.gz')
-    with tarfile.open(out, 'w:gz') as tar:
-        for name in ('hosting.db', 'projects', 'logs', 'tmp'):
-            src = os.path.join(DATA_DIR, name)
-            if os.path.exists(src):
-                tar.add(src, arcname=name)
-    return send_file(out, as_attachment=True, download_name=f'vip_panel_backup_{stamp}.tar.gz')
-
-
-@app.route('/panel/wipe')
-def panel_wipe():
-    """TEMPORARY: delete VIP panel data from the container DISK ONLY.
-    Does NOT touch TiDB and does NOT touch the Hbi data dir (vip/inf)."""
-    if not _panel_ok(request.args):
-        return jsonify(error='unauthorized'), 403, None
-    removed = []
-    # panel-only remnants on container disk; NEVER touch logs/hbi_sub.log
-    # (Hbi subprocess log) and NEVER touch TiDB or vip/inf.
-    targets = ['hosting.db', 'projects', 'tmp', os.path.join('logs', 'hosting.log')]
-    for t in targets:
-        p = os.path.join(DATA_DIR, t)
-        if os.path.exists(p):
-            try:
-                if os.path.isdir(p):
-                    shutil.rmtree(p)
-                else:
-                    os.remove(p)
-                removed.append(t)
-            except Exception as exc:
-                return jsonify(error=str(exc), failed=t), 500
-    return jsonify(removed=removed)
 
 
 if __name__ == '__main__':
