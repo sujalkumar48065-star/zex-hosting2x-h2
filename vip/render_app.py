@@ -189,7 +189,11 @@ def _hbi_supervisor():
             time.sleep(10)
 
 
-threading.Thread(target=_bot_supervisor, daemon=True).start()
+if os.environ.get('PANEL_ENABLE') == '1':
+    threading.Thread(target=_bot_supervisor, daemon=True).start()
+    logger.info("VIP panel bot supervisor started")
+else:
+    logger.info("VIP panel bot DISABLED (set PANEL_ENABLE=1 to re-enable)")
 _hbi_proc = None
 if os.environ.get('HBI_DISABLE') != '1':
     threading.Thread(target=_hbi_supervisor, daemon=True).start()
