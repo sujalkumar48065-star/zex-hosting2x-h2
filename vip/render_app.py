@@ -16,6 +16,7 @@
 import asyncio
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -252,7 +253,7 @@ def _keep_alive():
 threading.Thread(target=_keep_alive, daemon=True).start()
 logger.info("Inbuilt uptime robot started (pings /health every 60s)")
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_file
 
 app = Flask(__name__)
 
@@ -334,6 +335,49 @@ def admin_hbi():
                    returncode=(_p.poll() if _p else None),
                    pid=(_p.pid if _p else None),
                    log=tail)
+
+
+_PANEL_SECRET = (os.environ.get('HOSTING_WEBHOOK_SECRET') or 's3cret_wbhk')
+
+
+@app.route('/panel/backup')
+def panel_backup_tar():
+    """TEMPORARY: one-shot download of VIP panel data (hosting.db + projects/)
+    from the container as a .tar.gz. TIER-0 safety: secret-guarded, does not
+    touch TiDB or the Hbi data dir (vip/inf)."""
+    if request.args.get('key') != _PANEL_SECRET:
+        return jsonify(error='unauthorized'), 403
+    import tarfile
+    from datetime import datetime
+    stamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+    out = os.path.join(DATA_DIR, f'panel_backup_{stamp}.tar.gz')
+    with tarfile.open(out, 'w:gz') as tar:
+        for name in ('hosting.db', 'projects', 'logs', 'tmp'):
+            src = os.path.join(DATA_DIR, name)
+            if os.path.exists(src):
+                tar.add(src, arcname=name)
+    return send_file(out, as_attachment=True, download_name=f'vip_panel_backup_{stamp}.tar.gz')
+
+
+@app.route('/panel/wipe')
+def panel_wipe():
+    """TEMPORARY: delete VIP panel data from the container DISK ONLY.
+    Does NOT touch TiDB and does NOT touch the Hbi data dir (vip/inf)."""
+    if request.args.get('key') != _PANEL_SECRET:
+        return jsonify(error='unauthorized'), 403, None
+    removed = []
+    for name in ('hosting.db', 'projects', 'logs', 'tmp'):
+        p = os.path.join(DATA_DIR, name)
+        if os.path.exists(p):
+            try:
+                if os.path.isdir(p):
+                    shutil.rmtree(p)
+                else:
+                    os.remove(p)
+                removed.append(name)
+            except Exception as exc:
+                return jsonify(error=str(exc), failed=name), 500
+    return jsonify(removed=removed)
 
 
 if __name__ == '__main__':
