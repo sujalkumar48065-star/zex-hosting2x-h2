@@ -331,6 +331,25 @@ def admin_botlog():
         return jsonify(error='bad secret'), 403
     uid = (request.args.get('uid') or '').strip()
     name = (request.args.get('name') or '').strip()
+    if not name:
+        if not uid.isdigit():
+            return jsonify(error='bad args'), 400
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        folder = os.path.join(base_dir, 'upload_bots', uid)
+        out = []
+        if os.path.isdir(folder):
+            for fn in sorted(os.listdir(folder)):
+                try:
+                    fp = os.path.join(folder, fn)
+                    if os.path.isfile(fp):
+                        stat = os.stat(fp)
+                        out.append({'name': fn, 'size': stat.st_size,
+                                    'mtime': stat.st_mtime})
+                    else:
+                        out.append({'name': fn, 'is_dir': True})
+                except Exception as exc:
+                    out.append({'name': fn, 'err': str(exc)})
+        return jsonify(uid=uid, files=out)
     if not uid.isdigit() or '/' in name or '..' in name or '\\' in name or not name:
         return jsonify(error='bad args'), 400
     base_dir = os.path.dirname(os.path.abspath(__file__))
