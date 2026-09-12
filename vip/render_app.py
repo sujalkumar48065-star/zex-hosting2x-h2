@@ -320,6 +320,43 @@ def health():
     return jsonify(status='degraded', bot='restarting', polling=False, db=False)
 
 
+@app.route('/admin/botlog')
+def admin_botlog():
+    """TEMP diagnostic: read a user-bot's log file. Requires secret."""
+    from flask import request
+    sec = (request.args.get('secret') or '')
+    ok = sec and (sec == _PANEL_SECRET or (os.environ.get('HBI_LOG_SECRET') and sec == os.environ.get('HBI_LOG_SECRET')))
+    if not ok:
+        return jsonify(error='bad secret'), 403
+    uid = (request.args.get('uid') or '').strip()
+    name = (request.args.get('name') or '').strip()
+    if not uid.isdigit() or '/' in name or '..' in name or '\\' in name or not name:
+        return jsonify(error='bad args'), 400
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    folder = os.path.join(base_dir, 'upload_bots', uid)
+    log_path = os.path.join(folder, name)
+    real = os.path.realpath(log_path)
+    if not real.startswith(os.path.dirname(os.path.realpath(folder)) + os.sep):
+        return jsonify(error='path escape'), 400
+    if not os.path.exists(log_path):
+        return jsonify(error='not found', path=log_path), 404
+    try:
+        with open(log_path, 'r', errors='replace') as fh:
+            tail = fh.readlines()[-150:]
+        logname = os.path.join(folder, os.path.splitext(name)[0] + '.log')
+        both = ''
+        for p in (log_path, logname):
+            if os.path.exists(p):
+                try:
+                    with open(p, 'r', errors='replace') as fh:
+                        both += f"\n===== {os.path.basename(p)} =====\n" + ''.join(fh.readlines()[-150:])
+                except Exception as exc:
+                    both += f"\n===== {os.path.basename(p)} READ ERR {exc} =====\n"
+        return jsonify(uid=uid, name=name, log=both)
+    except Exception as exc:
+        return jsonify(error=str(exc)), 500
+
+
 @app.route('/admin/hbi')
 def admin_hbi():
     _p = _hbi_proc
