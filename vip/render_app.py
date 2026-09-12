@@ -331,10 +331,22 @@ def admin_botlog():
         return jsonify(error='bad secret'), 403
     uid = (request.args.get('uid') or '').strip()
     name = (request.args.get('name') or '').strip()
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    if not name and not uid:
+        out = []
+        root = os.path.join(base_dir, 'upload_bots')
+        if os.path.isdir(root):
+            for fn in sorted(os.listdir(root)):
+                try:
+                    stat = os.stat(os.path.join(root, fn))
+                    out.append({'name': fn, 'is_dir': os.path.isdir(os.path.join(root, fn)),
+                                'mtime': stat.st_mtime})
+                except Exception as exc:
+                    out.append({'name': fn, 'err': str(exc)})
+        return jsonify(uids=out)
     if not name:
         if not uid.isdigit():
             return jsonify(error='bad args'), 400
-        base_dir = os.path.dirname(os.path.abspath(__file__))
         folder = os.path.join(base_dir, 'upload_bots', uid)
         out = []
         if os.path.isdir(folder):
@@ -350,11 +362,15 @@ def admin_botlog():
                 except Exception as exc:
                     out.append({'name': fn, 'err': str(exc)})
         return jsonify(uid=uid, files=out)
-    if not uid.isdigit() or '/' in name or '..' in name or '\\' in name or not name:
+    if '..' in name or '\\' in name or name.startswith('/'):
         return jsonify(error='bad args'), 400
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    folder = os.path.join(base_dir, 'upload_bots', uid)
-    log_path = os.path.join(folder, name)
+    if uid.isdigit():
+        folder = os.path.join(base_dir, 'upload_bots', uid)
+        log_path = os.path.join(folder, name)
+    else:
+        folder = base_dir
+        log_path = os.path.join(base_dir, name)
     real = os.path.realpath(log_path)
     if not real.startswith(os.path.dirname(os.path.realpath(folder)) + os.sep):
         return jsonify(error='path escape'), 400
