@@ -365,6 +365,19 @@ def admin_botlog():
     if '..' in name or '\\' in name or name.startswith('/'):
         return jsonify(error='bad args'), 400
     base_dir = os.path.dirname(os.path.abspath(__file__))
+    if name == 'hbi_sub.log':
+        cands = [os.path.join(DATA_DIR, 'logs', 'hbi_sub.log'),
+                 '/opt/render/project/src/vip/hosting_data/logs/hbi_sub.log']
+        for c in cands:
+            if os.path.exists(c):
+                try:
+                    with open(c, 'r', errors='replace') as fh:
+                        lines = fh.readlines()
+                    return jsonify(uid='', name='hbi_sub.log', total=len(lines),
+                                   log=''.join(lines[-1000:]))
+                except Exception as exc:
+                    return jsonify(error=str(exc)), 500
+        return jsonify(error='not found', path=cands), 404
     if uid.isdigit():
         folder = os.path.join(base_dir, 'upload_bots', uid)
         log_path = os.path.join(folder, name)
