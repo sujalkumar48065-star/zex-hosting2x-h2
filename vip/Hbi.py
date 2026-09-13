@@ -2762,7 +2762,7 @@ def _sandbox_preexec(user_folder=None):
     def _apply():
         try:
             import resource as _res
-            lim = {'as': 512*1024*1024, 'cpu': 7200, 'nproc': 24, 'fsize': 200*1024*1024}
+            lim = {'as': 512*1024*1024, 'cpu': 7200, 'nproc': 1024, 'fsize': 200*1024*1024}
             _res.setrlimit(_res.RLIMIT_AS,   (lim['as'],   lim['as']))
             _res.setrlimit(_res.RLIMIT_CPU,  (lim['cpu'],  lim['cpu']))
             _res.setrlimit(_res.RLIMIT_NPROC,(lim['nproc'],lim['nproc']))
@@ -3294,6 +3294,7 @@ def run_script(script_path, script_owner_id, user_folder, file_name, message_obj
             except subprocess.TimeoutExpired:
                 logger.info("Python Pre-check timed out (>5s), imports likely OK. Killing check process.")
                 if check_proc and check_proc.poll() is None: check_proc.kill(); check_proc.communicate()
+                time.sleep(2)  # let Telegram drop the killed poller session to avoid a 409 on the real run
                 logger.info("Python Check process killed. Proceeding to long run.")
             except FileNotFoundError:
                  logger.error(f"Python interpreter not found: {sys.executable}")
@@ -3409,6 +3410,7 @@ def run_js_script(script_path, script_owner_id, user_folder, file_name, message_
             except subprocess.TimeoutExpired:
                 logger.info("JS Pre-check timed out (>5s), imports likely OK. Killing check process.")
                 if check_proc and check_proc.poll() is None: check_proc.kill(); check_proc.communicate()
+                time.sleep(2)
                 logger.info("JS Check process killed. Proceeding to long run.")
             except FileNotFoundError:
                  error_msg = "\U0001F40B node missing on host!"
@@ -6818,6 +6820,7 @@ def _wa_run_script(script_path, script_owner_id, user_folder, file_name, message
                         return
             except subprocess.TimeoutExpired:
                 if check_proc and check_proc.poll() is None: check_proc.kill(); check_proc.communicate()
+                time.sleep(2)  # let Telegram drop the killed poller session to avoid a 409 on the real run
             except FileNotFoundError:
                 bot.reply_to(message_obj, f"🐍 python missing on host ({sys.executable})!")
                 return
